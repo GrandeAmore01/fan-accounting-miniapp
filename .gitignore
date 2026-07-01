@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+miniprogram_npm/
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+
+# WeChat Mini Program generated files
+.idea/
+.vscode/
+*.wxss.map
+*.wxml.map
+*.js.map
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
