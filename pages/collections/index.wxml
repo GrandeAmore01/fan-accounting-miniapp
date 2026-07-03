@@ -1,6 +1,6 @@
 <view class="page">
   <text class="page-title">藏品图鉴</text>
-  <text class="page-subtitle">公共图鉴来自 data/collections.js，个人点亮状态保存在本地缓存。</text>
+  <text class="page-subtitle">浏览公共藏品图鉴，点亮状态只保存在当前用户本地缓存中。</text>
 
   <view class="card">
     <view class="row">
@@ -8,19 +8,45 @@
         <text class="muted">已拥有</text>
         <text class="metric">{{progress.ownedCount}}/{{progress.total}}</text>
       </view>
-      <text class="tag">本地图鉴</text>
+      <view>
+        <text class="muted">完成度</text>
+        <text class="metric">{{progress.percent}}%</text>
+      </view>
+    </view>
+    <view class="progress-track">
+      <view class="progress-fill" style="width: {{progress.percent}}%;"></view>
     </view>
   </view>
 
-  <view class="card" wx:for="{{collections}}" wx:key="collectionId">
+  <view class="toolbar card">
+    <input class="search-input" value="{{keyword}}" placeholder="搜索藏品名称或说明" bindinput="handleKeywordInput" />
+    <view class="filter-grid">
+      <picker mode="selector" range="{{categories}}" range-key="name" value="{{categoryIndex}}" bindchange="handleCategoryChange">
+        <view class="picker-field">{{categories[categoryIndex].name}}</view>
+      </picker>
+      <picker mode="selector" range="{{statusOptions}}" range-key="name" value="{{statusIndex}}" bindchange="handleStatusChange">
+        <view class="picker-field">{{statusOptions[statusIndex].name}}</view>
+      </picker>
+    </view>
+    <button class="secondary-button compact-button" bindtap="handleClearFilter">重置筛选</button>
+  </view>
+
+  <view class="card" wx:if="{{collections.length === 0}}">
+    <view class="empty">暂无符合条件的藏品。</view>
+  </view>
+
+  <view class="card collection-card" wx:for="{{collections}}" wx:key="collectionId">
     <view class="row">
       <text class="card-title">{{item.collectionName}}</text>
-      <text class="tag">{{item.category}}</text>
+      <text class="tag">{{item.categoryName}}</text>
     </view>
     <text class="muted">{{item.description}}</text>
-    <text class="muted">官方参考价：￥{{item.referencePrice}}</text>
-    <button class="{{item.isOwned ? 'secondary-button' : 'primary-button'}}" data-id="{{item.collectionId}}" bindtap="handleToggleOwned">
-      {{item.isOwned ? '取消点亮' : '点亮藏品'}}
-    </button>
+    <view class="row info-row">
+      <text class="price">￥{{item.referencePrice}}</text>
+      <text class="{{item.isOwned ? 'owned-text' : 'missing-text'}}">{{item.isOwned ? '已点亮' : '未点亮'}}</text>
+    </view>
+    <text class="muted" wx:if="{{item.expenseId}}">已同步消费记录：{{item.expenseId}}</text>
+    <button wx:if="{{item.isOwned}}" class="secondary-button" data-id="{{item.collectionId}}" bindtap="handleUnlightCollection">取消点亮</button>
+    <button wx:else class="primary-button" data-id="{{item.collectionId}}" bindtap="handleLightCollection">点亮藏品</button>
   </view>
 </view>

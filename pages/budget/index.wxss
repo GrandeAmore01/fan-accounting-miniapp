@@ -2,3 +2,176 @@
   display: block;
   margin-top: 10rpx;
 }
+
+.selector-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18rpx;
+}
+
+.picker-field,
+.form-input {
+  width: 100%;
+  min-height: 72rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid #eadbd5;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #2d2928;
+  font-size: 26rpx;
+  line-height: 72rpx;
+}
+
+.compact-button {
+  width: 180rpx;
+  height: 64rpx;
+  margin: 0;
+  font-size: 25rpx;
+  line-height: 64rpx;
+}
+
+.progress-track,
+.mini-track,
+.trend-track {
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: #f0e4df;
+}
+
+.progress-track {
+  height: 24rpx;
+  margin: 28rpx 0 12rpx;
+}
+
+.progress-fill,
+.mini-fill,
+.trend-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: #c84d69;
+}
+
+.warn-fill {
+  background: #d78a35;
+}
+
+.danger-fill {
+  background: #b94747;
+}
+
+.summary-row {
+  margin-top: 8rpx;
+}
+
+.status-text {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 25rpx;
+  line-height: 1.5;
+}
+
+.ok-text {
+  color: #4d8160;
+}
+
+.warn-text {
+  color: #a9651e;
+}
+
+.danger-text {
+  color: #a13f3f;
+}
+
+.stat-item {
+  margin-top: 24rpx;
+}
+
+.stat-name {
+  color: #3c3533;
+  font-size: 27rpx;
+  font-weight: 600;
+}
+
+.mini-track {
+  height: 16rpx;
+  margin-top: 12rpx;
+}
+
+.trend-item {
+  display: grid;
+  grid-template-columns: 120rpx 1fr 130rpx;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+
+.trend-label,
+.trend-amount {
+  color: #655b58;
+  font-size: 24rpx;
+}
+
+.trend-amount {
+  text-align: right;
+}
+
+.trend-track {
+  height: 18rpx;
+}
+
+.modal-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  padding: 28rpx;
+  background: rgba(32, 26, 24, 0.42);
+}
+
+.modal-panel {
+  width: 100%;
+  padding: 30rpx;
+  border-radius: 20rpx 20rpx 16rpx 16rpx;
+  background: #fffaf7;
+}
+
+.modal-header {
+  margin-bottom: 18rpx;
+}
+
+.close-button {
+  width: 64rpx;
+  height: 64rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: #f3e4df;
+  color: #7d5458;
+  font-size: 40rpx;
+  line-height: 60rpx;
+}
+
+.form-field {
+  margin-bottom: 20rpx;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 10rpx;
+  color: #4d4542;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.modal-actions button {
+  flex: 1;
+}

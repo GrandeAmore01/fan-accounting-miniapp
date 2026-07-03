@@ -1,19 +1,97 @@
 <view class="page">
   <text class="page-title">预算统计</text>
-  <text class="page-subtitle">展示预算使用情况和消费统计入口，完整图表后续模块实现。</text>
+  <text class="page-subtitle">设置月度或年度预算，按当前周期统计计入总消费的记录。</text>
 
-  <view class="card">
-    <text class="card-title">月度预算</text>
-    <text class="metric">￥{{progress.budget.amount}}</text>
-    <text class="muted">已统计消费：￥{{progress.totalAmount}}</text>
-    <text class="muted">当前使用进度：{{progress.percent}}%</text>
+  <view class="card selector-card">
+    <picker mode="selector" range="{{budgetTypes}}" range-key="name" value="{{budgetTypeIndex}}" bindchange="handleBudgetTypeChange">
+      <view class="picker-field">{{budgetTypes[budgetTypeIndex].name}}</view>
+    </picker>
+
+    <picker wx:if="{{selectedType === 'month'}}" mode="date" fields="month" value="{{selectedPeriod}}" bindchange="handleMonthChange">
+      <view class="picker-field">{{selectedPeriod}}</view>
+    </picker>
+
+    <input wx:else class="picker-field" type="number" maxlength="4" value="{{selectedPeriod}}" placeholder="输入年份" bindinput="handleYearInput" />
   </view>
 
   <view class="card">
-    <text class="card-title">预算提醒</text>
-    <text class="muted" wx:if="{{progress.budget.amount > 0}}">阈值：{{progress.budget.threshold * 100}}%，超过后后续可在页面内提示。</text>
-    <text class="muted" wx:else>尚未设置预算，可使用示例预算验证页面流程。</text>
+    <view class="row">
+      <view>
+        <text class="muted">预算金额</text>
+        <text class="metric">￥{{progress.budget.amount}}</text>
+      </view>
+      <button class="primary-button compact-button" bindtap="handleOpenBudgetForm">设置预算</button>
+    </view>
+
+    <view class="progress-track">
+      <view class="progress-fill {{progress.isOverBudget ? 'danger-fill' : progress.isOverThreshold ? 'warn-fill' : ''}}" style="width: {{progress.percent > 100 ? 100 : progress.percent}}%;"></view>
+    </view>
+
+    <view class="row summary-row">
+      <text class="muted">已用：￥{{progress.totalAmount}}</text>
+      <text class="muted">剩余：￥{{progress.remainingAmount}}</text>
+    </view>
+    <text class="muted">当前使用进度：{{progress.percent}}%，提醒阈值：{{progress.thresholdPercent}}%</text>
+    <text class="status-text danger-text" wx:if="{{progress.isOverBudget}}">已超过预算，请注意后续支出。</text>
+    <text class="status-text warn-text" wx:elif="{{progress.isOverThreshold}}">已达到提醒阈值，建议关注预算使用情况。</text>
+    <text class="status-text ok-text" wx:else>当前预算状态正常。</text>
   </view>
 
-  <button class="primary-button" bindtap="handleSetSampleBudget">设置示例预算</button>
+  <view class="card">
+    <text class="card-title">分类统计</text>
+    <view wx:if="{{categoryStats.length === 0}}" class="empty">当前周期暂无可统计消费。</view>
+    <view class="stat-item" wx:for="{{categoryStats}}" wx:key="category">
+      <view class="row">
+        <text class="stat-name">{{item.categoryName}}</text>
+        <text class="muted">￥{{item.amount}} · {{item.percent}}%</text>
+      </view>
+      <view class="mini-track">
+        <view class="mini-fill" style="width: {{item.percent}}%;"></view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">月度趋势</text>
+    <view wx:if="{{monthTrend.length === 0}}" class="empty">暂无月度消费数据。</view>
+    <view class="trend-item" wx:for="{{monthTrend}}" wx:key="month">
+      <text class="trend-label">{{item.month}}</text>
+      <view class="trend-track">
+        <view class="trend-fill" style="width: {{item.percent}}%;"></view>
+      </view>
+      <text class="trend-amount">￥{{item.amount}}</text>
+    </view>
+  </view>
+
+  <view class="modal-mask" wx:if="{{formVisible}}" catchtap="handleCloseBudgetForm">
+    <view class="modal-panel" catchtap="noop">
+      <view class="row modal-header">
+        <text class="card-title">设置{{budgetTypes[budgetTypeIndex].name}}</text>
+        <button class="close-button" bindtap="handleCloseBudgetForm">×</button>
+      </view>
+
+      <view class="form-field">
+        <text class="field-label">预算周期</text>
+        <picker wx:if="{{selectedType === 'month'}}" mode="date" fields="month" value="{{formData.period}}" bindchange="handleFormMonthChange">
+          <view class="picker-field">{{formData.period}}</view>
+        </picker>
+        <input wx:else class="form-input" type="number" maxlength="4" value="{{formData.period}}" data-field="period" placeholder="例如：2026" bindinput="handleFormInput" />
+      </view>
+
+      <view class="form-field">
+        <text class="field-label">预算金额</text>
+        <input class="form-input" type="digit" value="{{formData.amount}}" data-field="amount" placeholder="例如：1000" bindinput="handleFormInput" />
+      </view>
+
+      <view class="form-field">
+        <text class="field-label">提醒阈值（%）</text>
+        <input class="form-input" type="number" value="{{formData.thresholdPercent}}" data-field="thresholdPercent" placeholder="例如：80" bindinput="handleFormInput" />
+      </view>
+
+      <view class="modal-actions">
+        <button class="secondary-button" bindtap="handleCloseBudgetForm">取消</button>
+        <button class="primary-button" bindtap="handleSaveBudget">保存</button>
+      </view>
+    </view>
+  </view>
 </view>

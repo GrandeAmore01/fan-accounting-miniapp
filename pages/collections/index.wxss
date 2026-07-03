@@ -6,3 +6,77 @@
 .card button {
   margin-top: 20rpx;
 }
+
+.progress-track {
+  height: 20rpx;
+  margin-top: 24rpx;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: #f0e4df;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: #c84d69;
+}
+
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.search-input,
+.picker-field {
+  width: 100%;
+  min-height: 72rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid #eadbd5;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #2d2928;
+  font-size: 26rpx;
+  line-height: 72rpx;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+
+.compact-button {
+  height: 64rpx;
+  margin: 0;
+  font-size: 25rpx;
+  line-height: 64rpx;
+}
+
+.collection-card {
+  position: relative;
+}
+
+.info-row {
+  margin-top: 18rpx;
+}
+
+.price {
+  color: #c84d69;
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.owned-text,
+.missing-text {
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.owned-text {
+  color: #4d8160;
+}
+
+.missing-text {
+  color: #877d7a;
+}

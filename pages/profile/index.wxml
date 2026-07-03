@@ -1,22 +1,52 @@
 <view class="page">
   <text class="page-title">我的</text>
-  <text class="page-subtitle">账号与数据管理入口。第一阶段不依赖云环境，后续再接入微信登录和云同步。</text>
+  <text class="page-subtitle">账号与数据管理入口。第一阶段不依赖云环境，个人数据保存在本地缓存。</text>
 
-  <view class="card">
-    <text class="card-title">{{profile.nickname}}</text>
-    <text class="muted">登录状态：{{profile.loginStatus ? '已登录' : '游客/本地模式'}}</text>
+  <view class="card profile-card">
+    <view class="avatar-placeholder">本</view>
+    <view class="profile-main">
+      <text class="card-title">{{profile.nickname}}</text>
+      <text class="muted">登录状态：{{profile.loginStatus ? '已登录' : '游客/本地模式'}}</text>
+      <text class="tag">理性记录 · 隐私优先</text>
+    </view>
   </view>
 
   <view class="card">
-    <text class="card-title">本地数据概览</text>
-    <text class="muted">消费记录：{{counts.expenses}} 条</text>
-    <text class="muted">预算记录：{{counts.budgets}} 条</text>
-    <text class="muted">图鉴点亮状态：{{counts.userCollections}} 条</text>
-    <text class="muted">舞台点亮状态：{{counts.userStages}} 条</text>
+    <view class="row">
+      <text class="card-title">本地数据概览</text>
+      <text class="{{hasLocalData ? 'status-on' : 'status-off'}}">{{hasLocalData ? '已有数据' : '暂无数据'}}</text>
+    </view>
+    <view class="data-grid">
+      <view class="data-cell">
+        <text class="metric">{{counts.expenses}}</text>
+        <text class="muted">消费记录</text>
+      </view>
+      <view class="data-cell">
+        <text class="metric">{{counts.budgets}}</text>
+        <text class="muted">预算记录</text>
+      </view>
+      <view class="data-cell">
+        <text class="metric">{{counts.lightedCollections}}/{{counts.userCollections}}</text>
+        <text class="muted">图鉴点亮</text>
+      </view>
+      <view class="data-cell">
+        <text class="metric">{{counts.lightedStages}}/{{counts.userStages}}</text>
+        <text class="muted">舞台点亮</text>
+      </view>
+    </view>
   </view>
 
   <view class="card">
-    <text class="card-title">后续预留</text>
-    <text class="muted">微信登录、云数据库保存、数据同步与导出会在后续阶段实现。</text>
+    <text class="card-title">数据管理</text>
+    <button class="secondary-button" bindtap="handleLocalModeTap">查看本地模式</button>
+    <button class="secondary-button" bindtap="handleCloudReserveTap">查看云开发预留</button>
+    <button class="secondary-button danger-button" bindtap="handleClearLocalData">清理本地数据</button>
+  </view>
+
+  <view class="card">
+    <text class="card-title">隐私与同步</text>
+    <text class="muted">本阶段不上传个人消费、预算、图鉴或舞台点亮数据。</text>
+    <text class="muted">微信登录、云数据库保存和多设备同步会在后续阶段接入。</text>
+    <text class="muted">不会设计公开消费榜或粉丝消费排名。</text>
   </view>
 </view>

@@ -1,6 +1,6 @@
 <view class="page">
   <text class="page-title">消费记录</text>
-  <text class="page-subtitle">记录个人追星相关消费，第一阶段使用本地缓存保存。</text>
+  <text class="page-subtitle">记录个人追星相关消费，预算与统计只读取计入总消费的记录。</text>
 
   <view class="card">
     <view class="row">
@@ -16,19 +16,101 @@
     <text class="muted">预算使用进度：{{budgetProgress.percent}}%</text>
   </view>
 
-  <button class="primary-button" bindtap="handleAddSample">添加示例消费</button>
-
-  <view class="card" wx:if="{{expenses.length === 0}}">
-    <view class="empty">暂无消费记录，可先添加一条示例数据验证本地缓存。</view>
+  <view class="toolbar card">
+    <input class="search-input" value="{{keyword}}" placeholder="搜索项目或备注" bindinput="handleKeywordInput" />
+    <picker mode="selector" range="{{filterCategories}}" range-key="name" value="{{filterCategoryIndex}}" bindchange="handleFilterCategoryChange">
+      <view class="picker-field">{{filterCategories[filterCategoryIndex].name}}</view>
+    </picker>
+    <view class="toolbar-actions">
+      <button class="secondary-button compact-button" bindtap="handleClearFilter">重置</button>
+      <button class="primary-button compact-button" bindtap="handleOpenCreate">新增</button>
+    </view>
   </view>
 
-  <view class="card" wx:for="{{expenses}}" wx:key="expenseId">
+  <view class="card" wx:if="{{expenses.length === 0}}">
+    <view class="empty">暂无符合条件的消费记录。</view>
+  </view>
+
+  <view class="card expense-card" wx:for="{{expenses}}" wx:key="expenseId">
     <view class="row">
       <text class="card-title">{{item.itemName}}</text>
-      <text class="tag">￥{{item.amount}}</text>
+      <text class="tag">{{item.categoryName}}</text>
     </view>
-    <text class="muted">{{item.date}} · {{item.paymentMethod || '未填写支付方式'}}</text>
-    <text class="muted">分类：{{item.category}} · 数量：{{item.quantity}}</text>
+    <view class="row expense-meta">
+      <text class="amount">￥{{item.amount}}</text>
+      <text class="muted">{{item.date}}</text>
+    </view>
+    <text class="muted">数量：{{item.quantity}} · 支付方式：{{item.paymentMethod}}</text>
+    <text class="muted">统计口径：{{item.includeInTotal ? '计入总消费' : '不计入总消费'}}</text>
     <text class="muted" wx:if="{{item.remark}}">备注：{{item.remark}}</text>
+    <view class="item-actions">
+      <button class="secondary-button compact-button" data-id="{{item.expenseId}}" bindtap="handleOpenEdit">编辑</button>
+      <button class="secondary-button compact-button danger-button" data-id="{{item.expenseId}}" bindtap="handleDeleteExpense">删除</button>
+    </view>
+  </view>
+
+  <view class="modal-mask" wx:if="{{formVisible}}" catchtap="handleCloseForm">
+    <view class="modal-panel" catchtap="noop">
+      <view class="row modal-header">
+        <text class="card-title">{{formTitle}}</text>
+        <button class="close-button" bindtap="handleCloseForm">×</button>
+      </view>
+
+      <view class="form-field">
+        <text class="field-label">消费项目</text>
+        <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="例如：官方应援棒" bindinput="handleFormInput" />
+      </view>
+
+      <view class="form-field">
+        <text class="field-label">消费分类</text>
+        <picker mode="selector" range="{{categories}}" range-key="name" value="{{categoryIndex}}" bindchange="handleCategoryChange">
+          <view class="picker-field">{{categories[categoryIndex].name}}</view>
+        </picker>
+      </view>
+
+      <view class="field-grid">
+        <view class="form-field">
+          <text class="field-label">金额</text>
+          <input class="form-input" type="digit" value="{{formData.amount}}" data-field="amount" placeholder="0.00" bindinput="handleFormInput" />
+        </view>
+        <view class="form-field">
+          <text class="field-label">数量</text>
+          <input class="form-input" type="number" value="{{formData.quantity}}" data-field="quantity" placeholder="1" bindinput="handleFormInput" />
+        </view>
+      </view>
+
+      <view class="field-grid">
+        <view class="form-field">
+          <text class="field-label">消费日期</text>
+          <picker mode="date" value="{{formData.date}}" bindchange="handleDateChange">
+            <view class="picker-field">{{formData.date || '请选择日期'}}</view>
+          </picker>
+        </view>
+        <view class="form-field">
+          <text class="field-label">支付方式</text>
+          <picker mode="selector" range="{{paymentMethods}}" value="{{paymentMethodIndex}}" bindchange="handlePaymentMethodChange">
+            <view class="picker-field">{{paymentMethods[paymentMethodIndex]}}</view>
+          </picker>
+        </view>
+      </view>
+
+      <view class="form-field">
+        <text class="field-label">备注</text>
+        <input class="form-input" value="{{formData.remark}}" data-field="remark" placeholder="可选" bindinput="handleFormInput" />
+      </view>
+
+      <view class="switch-row">
+        <view>
+          <text class="field-label">计入总消费统计</text>
+          <text class="muted">关闭后不参与预算和累计消费。</text>
+        </view>
+        <switch checked="{{formData.includeInTotal}}" color="#c84d69" bindchange="handleIncludeChange" />
+      </view>
+
+      <view class="modal-actions">
+        <button class="secondary-button" bindtap="handleCloseForm">取消</button>
+        <button class="primary-button" bindtap="handleSubmitForm">保存</button>
+      </view>
+    </view>
   </view>
 </view>
