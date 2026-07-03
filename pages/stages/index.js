@@ -2,6 +2,11 @@ const stageService = require('../../services/stageService');
 
 Page({
   data: {
+    stageTypeOptions: [
+      { id: 'concert', name: '演唱会' },
+      { id: 'festival', name: '音乐节|拼盘' }
+    ],
+    stageTypeIndex: 0,
     yearOptions: stageService.getYearOptions(),
     statusOptions: [
       { id: 'all', name: '全部状态' },
@@ -28,6 +33,7 @@ Page({
 
   refreshPage() {
     const dashboard = stageService.getStageDashboard({
+      stageType: this.data.stageTypeOptions[this.data.stageTypeIndex].id,
       year: this.data.yearOptions[this.data.yearIndex].id,
       lightStatus: this.data.statusOptions[this.data.statusIndex].id,
       keyword: this.data.keyword
@@ -43,6 +49,14 @@ Page({
   handleKeywordInput(event) {
     this.setData({
       keyword: event.detail.value
+    });
+    this.refreshPage();
+  },
+
+  handleStageTypeChange(event) {
+    const stageTypeIndex = Number(event.currentTarget.dataset.index);
+    this.setData({
+      stageTypeIndex
     });
     this.refreshPage();
   },

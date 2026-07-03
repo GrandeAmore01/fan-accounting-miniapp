@@ -29,6 +29,30 @@
   gap: 18rpx;
 }
 
+.segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 6rpx;
+  border-radius: 14rpx;
+  background: #f0e4df;
+}
+
+.segment-item {
+  min-height: 64rpx;
+  border-radius: 10rpx;
+  color: #7a7270;
+  font-size: 25rpx;
+  line-height: 64rpx;
+  text-align: center;
+}
+
+.segment-active {
+  background: #ffffff;
+  color: #c84d69;
+  font-weight: 700;
+  box-shadow: 0 4rpx 14rpx rgba(62, 45, 41, 0.08);
+}
+
 .search-input,
 .picker-field {
   width: 100%;

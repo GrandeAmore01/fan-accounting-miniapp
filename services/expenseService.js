@@ -1,34 +1,105 @@
 const storageService = require('./storageService');
-const categories = require('../data/categories');
+const stageService = require('./stageService');
+const { expenseTypes, searchableItems } = require('../data/expenseTypes');
 
 const USER_ID = 'local-user';
-const expenseCategories = categories.filter((item) => item.type === 'expense' || item.type === 'collection');
+const expenseCategories = expenseTypes;
 
-function getCategoryName(categoryId) {
-  const category = expenseCategories.find((item) => item.id === categoryId);
-  return category ? category.name : '其他消费';
+function getMainType(mainTypeId) {
+  return expenseTypes.find((item) => item.id === mainTypeId);
+}
+
+function getSubType(mainTypeId, subTypeId) {
+  const mainType = getMainType(mainTypeId);
+  if (!mainType) {
+    return null;
+  }
+  return mainType.subTypes.find((item) => item.id === subTypeId);
+}
+
+function getCategoryName(categoryId, subTypeId) {
+  const mainType = getMainType(categoryId);
+  const subType = getSubType(categoryId, subTypeId);
+  if (!mainType) {
+    return '其他消费';
+  }
+  return subType ? `${mainType.name} / ${subType.name}` : mainType.name;
+}
+
+function toNumber(value) {
+  return Number(value || 0);
+}
+
+function normalizeFees(fees = {}) {
+  return {
+    premium: toNumber(fees.premium),
+    travel: toNumber(fees.travel),
+    hotel: toNumber(fees.hotel),
+    rental: toNumber(fees.rental),
+    other: toNumber(fees.other),
+    shipping: toNumber(fees.shipping)
+  };
+}
+
+function calculateTotalAmount(expense) {
+  const fees = normalizeFees(expense.fees);
+  return (
+    toNumber(expense.amount) * toNumber(expense.quantity || 1) +
+    fees.premium +
+    fees.travel +
+    fees.hotel +
+    fees.rental +
+    fees.other +
+    fees.shipping
+  );
+}
+
+function shouldIncludeExpense(expense) {
+  return !expense.outfieldOnly && expense.includeInTotal !== false;
+}
+
+function calculateIncludedAmount(expense) {
+  return shouldIncludeExpense(expense) ? calculateTotalAmount(expense) : 0;
 }
 
 function listExpenses() {
-  return storageService.getCollection(USER_ID, 'expenses').map((item) => ({
-    ...item,
-    categoryName: getCategoryName(item.category)
-  }));
+  return storageService.getCollection(USER_ID, 'expenses').map((item) => {
+    const outfieldOnly = Boolean(item.outfieldOnly);
+    const nextItem = {
+      ...item,
+      outfieldOnly,
+      includeInTotal: outfieldOnly ? false : item.includeInTotal !== false,
+      images: item.images || [],
+      fees: normalizeFees(item.fees)
+    };
+    return {
+      ...nextItem,
+      categoryName: getCategoryName(nextItem.category, nextItem.subType),
+      totalAmount: calculateTotalAmount(nextItem),
+      includedAmount: calculateIncludedAmount(nextItem)
+    };
+  });
 }
 
 function normalizeExpense(expense) {
   return {
     expenseId: expense.expenseId || `expense_${Date.now()}`,
-    category: expense.category || 'other',
+    category: expense.category || 'meet',
+    subType: expense.subType || 'concert',
     itemName: (expense.itemName || '').trim(),
     amount: Number(expense.amount || 0),
     quantity: Number(expense.quantity || 1),
     date: expense.date || '',
     paymentMethod: expense.paymentMethod || '',
     remark: (expense.remark || '').trim(),
-    includeInTotal: expense.includeInTotal !== false,
+    images: (expense.images || []).slice(0, 9),
+    fees: normalizeFees(expense.fees),
+    outfieldOnly: Boolean(expense.outfieldOnly),
+    includeInTotal: expense.outfieldOnly ? false : expense.includeInTotal !== false,
     collectionId: expense.collectionId || '',
-    stageId: expense.stageId || ''
+    stageId: expense.stageId || '',
+    stageDate: expense.stageDate || '',
+    priceTier: expense.priceTier || ''
   };
 }
 
@@ -40,6 +111,9 @@ function validateExpense(expense) {
   if (!nextExpense.date) {
     return { valid: false, message: '请选择消费日期' };
   }
+  if (nextExpense.images.length > 9) {
+    return { valid: false, message: '图片最多上传 9 张' };
+  }
   if (!nextExpense.amount || nextExpense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };
   }
@@ -47,6 +121,12 @@ function validateExpense(expense) {
     return { valid: false, message: '请输入大于 0 的数量' };
   }
   return { valid: true, data: nextExpense };
+}
+
+function syncStageLight(expense) {
+  if (expense.category === 'meet' && expense.stageId) {
+    stageService.lightStage(expense.stageId);
+  }
 }
 
 function addExpense(expense) {
@@ -57,6 +137,7 @@ function addExpense(expense) {
   const expenses = storageService.getCollection(USER_ID, 'expenses');
   const nextExpense = validation.data;
   storageService.setCollection(USER_ID, 'expenses', [nextExpense, ...expenses]);
+  syncStageLight(nextExpense);
   return { valid: true, data: nextExpense };
 }
 
@@ -71,6 +152,7 @@ function updateExpense(expenseId, expense) {
   const expenses = storageService.getCollection(USER_ID, 'expenses');
   const nextExpenses = expenses.map((item) => (item.expenseId === expenseId ? validation.data : item));
   storageService.setCollection(USER_ID, 'expenses', nextExpenses);
+  syncStageLight(validation.data);
   return { valid: true, data: validation.data };
 }
 
@@ -92,8 +174,7 @@ function filterExpenses(filter) {
 
 function getExpenseSummary() {
   const expenses = listExpenses();
-  const includedExpenses = expenses.filter((item) => item.includeInTotal !== false);
-  const totalAmount = includedExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalAmount = expenses.reduce((sum, item) => sum + calculateIncludedAmount(item), 0);
   return {
     totalAmount,
     count: expenses.length
@@ -102,6 +183,12 @@ function getExpenseSummary() {
 
 module.exports = {
   expenseCategories,
+  searchableItems,
+  getMainType,
+  getSubType,
+  getCategoryName,
+  calculateTotalAmount,
+  calculateIncludedAmount,
   listExpenses,
   filterExpenses,
   addExpense,

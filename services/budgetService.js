@@ -92,7 +92,7 @@ function getPeriodExpenses(budgetType = 'month', period = getDefaultPeriod(budge
 function getBudgetProgress(budgetType = 'month', period = getDefaultPeriod(budgetType)) {
   const budget = getBudget(budgetType, period);
   const periodExpenses = getPeriodExpenses(budget.budgetType, budget.period);
-  const totalAmount = periodExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalAmount = periodExpenses.reduce((sum, item) => sum + Number(item.includedAmount || 0), 0);
   const usedRate = budget.amount > 0 ? totalAmount / budget.amount : 0;
   const thresholdPercent = Math.round(budget.threshold * 100);
   return {
@@ -109,7 +109,7 @@ function getBudgetProgress(budgetType = 'month', period = getDefaultPeriod(budge
 
 function getCategoryStats(budgetType = 'month', period = getDefaultPeriod(budgetType)) {
   const periodExpenses = getPeriodExpenses(budgetType, period);
-  const totalAmount = periodExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalAmount = periodExpenses.reduce((sum, item) => sum + Number(item.includedAmount || 0), 0);
   const map = {};
   periodExpenses.forEach((item) => {
     if (!map[item.category]) {
@@ -120,7 +120,7 @@ function getCategoryStats(budgetType = 'month', period = getDefaultPeriod(budget
         count: 0
       };
     }
-    map[item.category].amount += Number(item.amount || 0);
+    map[item.category].amount += Number(item.includedAmount || 0);
     map[item.category].count += 1;
   });
   return Object.keys(map)
@@ -136,7 +136,7 @@ function getMonthTrend(limit = 6) {
   const map = {};
   expenses.forEach((item) => {
     const month = item.date.slice(0, 7);
-    map[month] = (map[month] || 0) + Number(item.amount || 0);
+    map[month] = (map[month] || 0) + Number(item.includedAmount || 0);
   });
   const months = Object.keys(map).sort().slice(-limit);
   const maxAmount = Math.max(...months.map((month) => map[month]), 0);

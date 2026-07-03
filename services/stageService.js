@@ -17,6 +17,7 @@ function listStages() {
       songListText: (item.songList || []).join('、'),
       songCount: (item.songList || []).length,
       albumName: item.albumId || '未关联专辑',
+      priceTierText: (item.priceTiers || []).map((price) => `${price}元`).join(' / '),
       isLighted: Boolean(userState && userState.isLighted),
       lightTime: userState ? userState.lightTime : ''
     };
@@ -27,7 +28,9 @@ function filterStages(filter) {
   const keyword = (filter.keyword || '').trim();
   const year = filter.year || 'all';
   const lightStatus = filter.lightStatus || 'all';
+  const stageType = filter.stageType || 'all';
   return listStages().filter((item) => {
+    const typeMatched = stageType === 'all' || item.stageType === stageType;
     const yearMatched = year === 'all' || String(item.year) === year;
     const keywordMatched =
       !keyword ||
@@ -38,8 +41,26 @@ function filterStages(filter) {
       lightStatus === 'all' ||
       (lightStatus === 'lighted' && item.isLighted) ||
       (lightStatus === 'unlighted' && !item.isLighted);
-    return yearMatched && keywordMatched && statusMatched;
+    return typeMatched && yearMatched && keywordMatched && statusMatched;
   });
+}
+
+function getStagesByType(stageType) {
+  return listStages().filter((item) => item.stageType === stageType);
+}
+
+function getConcertStageOptions() {
+  return getStagesByType('concert').map((item) => ({
+    id: item.stageId,
+    name: `${item.date} ${item.stageName}`,
+    date: item.date,
+    stageName: item.stageName,
+    priceTiers: item.priceTiers || []
+  }));
+}
+
+function findStageByDate(date, stageType = 'concert') {
+  return listStages().find((item) => item.stageType === stageType && item.date === date);
 }
 
 function setStageLighted(stageId, isLighted) {
@@ -147,6 +168,9 @@ module.exports = {
   getYearOptions,
   listStages,
   filterStages,
+  getStagesByType,
+  getConcertStageOptions,
+  findStageByDate,
   lightStage,
   unlightStage,
   getSongStats,

@@ -20,6 +20,15 @@
   </view>
 
   <view class="toolbar card">
+    <view class="segment">
+      <view
+        wx:for="{{stageTypeOptions}}"
+        wx:key="id"
+        class="segment-item {{stageTypeIndex === index ? 'segment-active' : ''}}"
+        data-index="{{index}}"
+        bindtap="handleStageTypeChange"
+      >{{item.name}}</view>
+    </view>
     <input class="search-input" value="{{keyword}}" placeholder="搜索场次、地点或歌曲" bindinput="handleKeywordInput" />
     <view class="filter-grid">
       <picker mode="selector" range="{{yearOptions}}" range-key="name" value="{{yearIndex}}" bindchange="handleYearChange">

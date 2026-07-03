@@ -82,8 +82,17 @@ function createExpenseFromCollection(collectionId) {
   if (!collection) {
     return { valid: false, message: '图鉴项目不存在' };
   }
+  const expenseType = collection.category === 'album' ? 'album' : 'goods';
+  const subTypeMap = {
+    album: 'album_utopia',
+    magazine: 'magazine',
+    goods: 'other_goods',
+    card: 'photo_card',
+    endorsement: 'other_goods'
+  };
   const expenseResult = expenseService.addExpense({
-    category: collection.category,
+    category: expenseType,
+    subType: subTypeMap[collection.category] || 'other_goods',
     itemName: collection.collectionName,
     amount: collection.referencePrice || 0,
     quantity: 1,

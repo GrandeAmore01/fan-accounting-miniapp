@@ -1,6 +1,6 @@
 <view class="page">
   <text class="page-title">消费记录</text>
-  <text class="page-subtitle">记录个人追星相关消费，预算与统计只读取计入总消费的记录。</text>
+  <text class="page-subtitle">按见面、实体专辑、周边和商务记录消费，也可以保存图片作为追星回忆。</text>
 
   <view class="card">
     <view class="row">
@@ -37,11 +37,13 @@
       <text class="tag">{{item.categoryName}}</text>
     </view>
     <view class="row expense-meta">
-      <text class="amount">￥{{item.amount}}</text>
+      <text class="amount">￥{{item.includedAmount}}</text>
       <text class="muted">{{item.date}}</text>
     </view>
-    <text class="muted">数量：{{item.quantity}} · 支付方式：{{item.paymentMethod}}</text>
-    <text class="muted">统计口径：{{item.includeInTotal ? '计入总消费' : '不计入总消费'}}</text>
+    <text class="muted">实际合计：￥{{item.totalAmount}} · 基础金额：￥{{item.amount}} · 数量：{{item.quantity}}</text>
+    <text class="muted">统计口径：{{item.includeInTotal ? '计入总消费' : '不计入总消费'}} · 计入统计：￥{{item.includedAmount}}</text>
+    <text class="muted" wx:if="{{item.images.length}}">图片：{{item.images.length}} 张</text>
+    <text class="muted" wx:if="{{item.stageId}}">已联动舞台：{{item.stageId}}</text>
     <text class="muted" wx:if="{{item.remark}}">备注：{{item.remark}}</text>
     <view class="item-actions">
       <button class="secondary-button compact-button" data-id="{{item.expenseId}}" bindtap="handleOpenEdit">编辑</button>
@@ -56,26 +58,18 @@
         <button class="close-button" bindtap="handleCloseForm">×</button>
       </view>
 
-      <view class="form-field">
-        <text class="field-label">消费项目</text>
-        <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="例如：官方应援棒" bindinput="handleFormInput" />
-      </view>
-
-      <view class="form-field">
-        <text class="field-label">消费分类</text>
-        <picker mode="selector" range="{{categories}}" range-key="name" value="{{categoryIndex}}" bindchange="handleCategoryChange">
-          <view class="picker-field">{{categories[categoryIndex].name}}</view>
-        </picker>
-      </view>
-
       <view class="field-grid">
         <view class="form-field">
-          <text class="field-label">金额</text>
-          <input class="form-input" type="digit" value="{{formData.amount}}" data-field="amount" placeholder="0.00" bindinput="handleFormInput" />
+          <text class="field-label">大类型</text>
+          <picker mode="selector" range="{{categories}}" range-key="name" value="{{categoryIndex}}" bindchange="handleCategoryChange">
+            <view class="picker-field">{{categories[categoryIndex].name}}</view>
+          </picker>
         </view>
         <view class="form-field">
-          <text class="field-label">数量</text>
-          <input class="form-input" type="number" value="{{formData.quantity}}" data-field="quantity" placeholder="1" bindinput="handleFormInput" />
+          <text class="field-label">小类型</text>
+          <picker mode="selector" range="{{subTypes}}" range-key="name" value="{{subTypeIndex}}" bindchange="handleSubTypeChange">
+            <view class="picker-field">{{subTypes[subTypeIndex].name}}</view>
+          </picker>
         </view>
       </view>
 
@@ -94,12 +88,134 @@
         </view>
       </view>
 
-      <view class="form-field">
-        <text class="field-label">备注</text>
-        <input class="form-input" value="{{formData.remark}}" data-field="remark" placeholder="可选" bindinput="handleFormInput" />
+      <view wx:if="{{formData.category === 'meet' && (formData.subType === 'concert' || formData.subType === 'festival')}}" class="form-section">
+        <text class="section-title">{{formData.subType === 'concert' ? '演唱会场次' : '音乐节|拼盘场次'}}</text>
+        <text class="muted">先选择消费日期，系统会按日期自动匹配具体场次。</text>
+        <view class="matched-stage {{matchedMeetStageName ? '' : 'unmatched-stage'}}">
+          {{matchedMeetStageName || '当前日期暂无匹配场次'}}
+        </view>
+        <view class="form-field" wx:if="{{!matchedMeetStageName}}">
+          <text class="field-label">{{formData.subType === 'concert' ? '演唱会名称' : '音乐节|拼盘名称'}}</text>
+          <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="可手动填写名称" bindinput="handleFormInput" />
+        </view>
+        <view class="form-field">
+          <text class="field-label">金额档位</text>
+          <picker mode="selector" range="{{priceTierLabels}}" value="{{priceTierIndex}}" bindchange="handlePriceTierChange">
+            <view class="picker-field">{{priceTierLabels.length ? priceTierLabels[priceTierIndex] : '暂无档位'}}</view>
+          </picker>
+        </view>
+        <view class="form-field">
+          <text class="field-label">金额</text>
+          <input class="form-input" type="digit" value="{{formData.amount}}" data-field="amount" placeholder="可在预设档位基础上手动调整" bindinput="handleFormInput" />
+        </view>
       </view>
 
-      <view class="switch-row">
+      <view wx:elif="{{formData.category === 'goods' || formData.category === 'business'}}" class="form-section">
+        <text class="section-title">{{formData.category === 'goods' ? '周边/杂志名称' : '商务品牌名称'}}</text>
+        <input class="form-input" value="{{searchKeyword}}" placeholder="搜索周边/杂志名称（不受子类型限制）" bindinput="handleItemSearchInput" />
+        <view class="search-result" wx:for="{{searchResults}}" wx:key="id" data-id="{{item.id}}" bindtap="handleSelectSearchItem">
+          <text>{{item.name}}</text>
+        </view>
+        <view class="form-field">
+          <text class="field-label">项目名称</text>
+          <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="也可手动填写名称" bindinput="handleFormInput" />
+        </view>
+      </view>
+
+      <view wx:else class="form-field">
+        <text class="field-label">项目名称</text>
+        <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="例如：实体专辑名称或活动名称" bindinput="handleFormInput" />
+      </view>
+
+      <view class="field-grid" wx:if="{{!(formData.category === 'meet' && (formData.subType === 'concert' || formData.subType === 'festival'))}}">
+        <view class="form-field">
+          <text class="field-label">金额</text>
+          <input class="form-input" type="digit" value="{{formData.amount}}" data-field="amount" placeholder="0.00" bindinput="handleFormInput" />
+        </view>
+        <view class="form-field">
+          <text class="field-label">数量</text>
+          <input class="form-input" type="number" value="{{formData.quantity}}" data-field="quantity" placeholder="1" bindinput="handleFormInput" />
+        </view>
+      </view>
+      <view class="form-field" wx:else>
+        <text class="field-label">数量</text>
+        <input class="form-input" type="number" value="{{formData.quantity}}" data-field="quantity" placeholder="1" bindinput="handleFormInput" />
+      </view>
+
+      <view wx:if="{{formData.category === 'meet' && formData.subType === 'concert'}}" class="form-section">
+        <text class="section-title">附加费用</text>
+        <view class="field-grid">
+          <view class="form-field">
+            <text class="field-label">加价</text>
+            <input class="form-input" type="digit" value="{{formData.fees.premium}}" data-field="premium" placeholder="0.00" bindinput="handleFeeInput" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">路费</text>
+            <input class="form-input" type="digit" value="{{formData.fees.travel}}" data-field="travel" placeholder="0.00" bindinput="handleFeeInput" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">住宿费</text>
+            <input class="form-input" type="digit" value="{{formData.fees.hotel}}" data-field="hotel" placeholder="0.00" bindinput="handleFeeInput" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">设备租赁费</text>
+            <input class="form-input" type="digit" value="{{formData.fees.rental}}" data-field="rental" placeholder="0.00" bindinput="handleFeeInput" />
+          </view>
+        </view>
+        <view class="form-field fee-single">
+          <text class="field-label">其他费用</text>
+          <input class="form-input" type="digit" value="{{formData.fees.other}}" data-field="other" placeholder="0.00" bindinput="handleFeeInput" />
+        </view>
+        <view class="switch-row">
+          <view>
+            <text class="field-label">场外记录（不计入消费）</text>
+            <text class="muted">打开后整条记录不参与预算和总消费。</text>
+          </view>
+          <switch checked="{{formData.outfieldOnly}}" color="#c84d69" bindchange="handleOutfieldChange" />
+        </view>
+      </view>
+
+      <view wx:if="{{formData.category === 'album'}}" class="form-section">
+        <text class="section-title">实体专辑补充</text>
+        <view class="field-grid">
+          <view class="form-field">
+            <text class="field-label">加价</text>
+            <input class="form-input" type="digit" value="{{formData.fees.premium}}" data-field="premium" placeholder="0.00" bindinput="handleFeeInput" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">邮费</text>
+            <input class="form-input" type="digit" value="{{formData.fees.shipping}}" data-field="shipping" placeholder="0.00" bindinput="handleFeeInput" />
+          </view>
+        </view>
+        <view class="switch-row">
+          <view>
+            <text class="field-label">不计入总消费</text>
+            <text class="muted">例如只想记录购买渠道或票务来源时可打开。</text>
+          </view>
+          <switch checked="{{formData.outfieldOnly}}" color="#c84d69" bindchange="handleOutfieldChange" />
+        </view>
+      </view>
+
+      <view class="form-field">
+        <text class="field-label">备注</text>
+        <input class="form-input" value="{{formData.remark}}" data-field="remark" placeholder="选填，例如购买渠道、票务来源、追星感受" bindinput="handleFormInput" />
+      </view>
+
+      <view class="form-section">
+        <view class="row">
+          <text class="section-title">图片回忆</text>
+          <text class="muted">{{formData.images.length}}/9</text>
+        </view>
+        <view class="image-grid">
+          <view class="image-item" wx:for="{{formData.images}}" wx:key="*this">
+            <image src="{{item}}" mode="aspectFill"></image>
+            <text class="image-remove" data-index="{{index}}" bindtap="handleRemoveImage">×</text>
+          </view>
+          <view class="image-add" wx:if="{{formData.images.length < 9}}" bindtap="handleChooseImages">+</view>
+        </view>
+      </view>
+
+      <view wx:if="{{!(formData.category === 'meet' && formData.subType === 'concert') && formData.category !== 'album'}}" class="switch-row">
         <view>
           <text class="field-label">计入总消费统计</text>
           <text class="muted">关闭后不参与预算和累计消费。</text>
