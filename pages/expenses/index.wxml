@@ -1,0 +1,34 @@
+<view class="page">
+  <text class="page-title">消费记录</text>
+  <text class="page-subtitle">记录个人追星相关消费，第一阶段使用本地缓存保存。</text>
+
+  <view class="card">
+    <view class="row">
+      <view>
+        <text class="muted">累计消费</text>
+        <text class="metric">￥{{summary.totalAmount}}</text>
+      </view>
+      <view>
+        <text class="muted">记录数</text>
+        <text class="metric">{{summary.count}}</text>
+      </view>
+    </view>
+    <text class="muted">预算使用进度：{{budgetProgress.percent}}%</text>
+  </view>
+
+  <button class="primary-button" bindtap="handleAddSample">添加示例消费</button>
+
+  <view class="card" wx:if="{{expenses.length === 0}}">
+    <view class="empty">暂无消费记录，可先添加一条示例数据验证本地缓存。</view>
+  </view>
+
+  <view class="card" wx:for="{{expenses}}" wx:key="expenseId">
+    <view class="row">
+      <text class="card-title">{{item.itemName}}</text>
+      <text class="tag">￥{{item.amount}}</text>
+    </view>
+    <text class="muted">{{item.date}} · {{item.paymentMethod || '未填写支付方式'}}</text>
+    <text class="muted">分类：{{item.category}} · 数量：{{item.quantity}}</text>
+    <text class="muted" wx:if="{{item.remark}}">备注：{{item.remark}}</text>
+  </view>
+</view>

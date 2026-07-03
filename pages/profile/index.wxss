@@ -1,0 +1,4 @@
+.card .muted {
+  display: block;
+  margin-top: 10rpx;
+}

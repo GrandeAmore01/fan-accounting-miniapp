@@ -1,0 +1,46 @@
+{
+  "pages": [
+    "pages/expenses/index",
+    "pages/budget/index",
+    "pages/collections/index",
+    "pages/stages/index",
+    "pages/profile/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "粉丝消费收藏管理",
+    "navigationBarBackgroundColor": "#f8f3ef",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f5f2",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#7a7270",
+    "selectedColor": "#c84d69",
+    "backgroundColor": "#fffaf7",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/expenses/index",
+        "text": "消费记录"
+      },
+      {
+        "pagePath": "pages/budget/index",
+        "text": "预算统计"
+      },
+      {
+        "pagePath": "pages/collections/index",
+        "text": "藏品图鉴"
+      },
+      {
+        "pagePath": "pages/stages/index",
+        "text": "舞台记录"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

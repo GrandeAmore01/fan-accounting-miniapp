@@ -1,0 +1,8 @@
+.primary-button {
+  margin-bottom: 24rpx;
+}
+
+.card .muted {
+  display: block;
+  margin-top: 8rpx;
+}

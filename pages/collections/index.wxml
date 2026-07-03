@@ -1,0 +1,26 @@
+<view class="page">
+  <text class="page-title">藏品图鉴</text>
+  <text class="page-subtitle">公共图鉴来自 data/collections.js，个人点亮状态保存在本地缓存。</text>
+
+  <view class="card">
+    <view class="row">
+      <view>
+        <text class="muted">已拥有</text>
+        <text class="metric">{{progress.ownedCount}}/{{progress.total}}</text>
+      </view>
+      <text class="tag">本地图鉴</text>
+    </view>
+  </view>
+
+  <view class="card" wx:for="{{collections}}" wx:key="collectionId">
+    <view class="row">
+      <text class="card-title">{{item.collectionName}}</text>
+      <text class="tag">{{item.category}}</text>
+    </view>
+    <text class="muted">{{item.description}}</text>
+    <text class="muted">官方参考价：￥{{item.referencePrice}}</text>
+    <button class="{{item.isOwned ? 'secondary-button' : 'primary-button'}}" data-id="{{item.collectionId}}" bindtap="handleToggleOwned">
+      {{item.isOwned ? '取消点亮' : '点亮藏品'}}
+    </button>
+  </view>
+</view>

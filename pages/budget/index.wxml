@@ -1,0 +1,19 @@
+<view class="page">
+  <text class="page-title">预算统计</text>
+  <text class="page-subtitle">展示预算使用情况和消费统计入口，完整图表后续模块实现。</text>
+
+  <view class="card">
+    <text class="card-title">月度预算</text>
+    <text class="metric">￥{{progress.budget.amount}}</text>
+    <text class="muted">已统计消费：￥{{progress.totalAmount}}</text>
+    <text class="muted">当前使用进度：{{progress.percent}}%</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">预算提醒</text>
+    <text class="muted" wx:if="{{progress.budget.amount > 0}}">阈值：{{progress.budget.threshold * 100}}%，超过后后续可在页面内提示。</text>
+    <text class="muted" wx:else>尚未设置预算，可使用示例预算验证页面流程。</text>
+  </view>
+
+  <button class="primary-button" bindtap="handleSetSampleBudget">设置示例预算</button>
+</view>

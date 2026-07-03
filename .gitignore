@@ -11,6 +11,7 @@ coverage/
 # WeChat Mini Program generated files
 .idea/
 .vscode/
+project.private.config.json
 *.wxss.map
 *.wxml.map
 *.js.map
@@ -30,4 +31,3 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
-

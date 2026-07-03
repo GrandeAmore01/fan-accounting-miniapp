@@ -1,0 +1,22 @@
+<view class="page">
+  <text class="page-title">我的</text>
+  <text class="page-subtitle">账号与数据管理入口。第一阶段不依赖云环境，后续再接入微信登录和云同步。</text>
+
+  <view class="card">
+    <text class="card-title">{{profile.nickname}}</text>
+    <text class="muted">登录状态：{{profile.loginStatus ? '已登录' : '游客/本地模式'}}</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">本地数据概览</text>
+    <text class="muted">消费记录：{{counts.expenses}} 条</text>
+    <text class="muted">预算记录：{{counts.budgets}} 条</text>
+    <text class="muted">图鉴点亮状态：{{counts.userCollections}} 条</text>
+    <text class="muted">舞台点亮状态：{{counts.userStages}} 条</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">后续预留</text>
+    <text class="muted">微信登录、云数据库保存、数据同步与导出会在后续阶段实现。</text>
+  </view>
+</view>

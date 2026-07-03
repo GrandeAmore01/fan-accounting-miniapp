@@ -1,0 +1,29 @@
+<view class="page">
+  <text class="page-title">舞台记录</text>
+  <text class="page-subtitle">点亮看过或补档过的舞台，歌曲统计先做基础汇总。</text>
+
+  <view class="card">
+    <view class="row">
+      <view>
+        <text class="muted">已点亮场次</text>
+        <text class="metric">{{stats.lightedCount}}/{{stats.total}}</text>
+      </view>
+      <view>
+        <text class="muted">解锁歌曲</text>
+        <text class="metric">{{stats.unlockedSongCount}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:for="{{stages}}" wx:key="stageId">
+    <view class="row">
+      <text class="card-title">{{item.stageName}}</text>
+      <text class="tag">{{item.year}}</text>
+    </view>
+    <text class="muted">{{item.date}} · {{item.location}}</text>
+    <text class="muted">歌单：{{item.songListText}}</text>
+    <button class="{{item.isLighted ? 'secondary-button' : 'primary-button'}}" data-id="{{item.stageId}}" bindtap="handleToggleStage">
+      {{item.isLighted ? '取消点亮' : '点亮舞台'}}
+    </button>
+  </view>
+</view>

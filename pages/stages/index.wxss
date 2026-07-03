@@ -1,0 +1,8 @@
+.card .muted {
+  display: block;
+  margin-top: 10rpx;
+}
+
+.card button {
+  margin-top: 20rpx;
+}
