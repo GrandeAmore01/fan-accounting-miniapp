@@ -14,10 +14,10 @@
   width: 100%;
   min-height: 72rpx;
   padding: 0 22rpx;
-  border: 1rpx solid #eadbd5;
+  border: 1rpx solid #e8d17b;
   border-radius: 12rpx;
   background: #ffffff;
-  color: #2d2928;
+  color: #252116;
   font-size: 26rpx;
   line-height: 72rpx;
 }
@@ -35,7 +35,7 @@
 .trend-track {
   overflow: hidden;
   border-radius: 999rpx;
-  background: #f0e4df;
+  background: #f4e6a8;
 }
 
 .progress-track {
@@ -48,7 +48,7 @@
 .trend-fill {
   height: 100%;
   border-radius: 999rpx;
-  background: #c84d69;
+  background: #f5c400;
 }
 
 .warn-fill {
@@ -87,7 +87,7 @@
 }
 
 .stat-name {
-  color: #3c3533;
+  color: #2d2718;
   font-size: 27rpx;
   font-weight: 600;
 }
@@ -107,7 +107,7 @@
 
 .trend-label,
 .trend-amount {
-  color: #655b58;
+  color: #776f5e;
   font-size: 24rpx;
 }
 
@@ -136,7 +136,7 @@
   width: 100%;
   padding: 30rpx;
   border-radius: 20rpx 20rpx 16rpx 16rpx;
-  background: #fffaf7;
+  background: #fffdf7;
 }
 
 .modal-header {
@@ -149,8 +149,8 @@
   margin: 0;
   padding: 0;
   border-radius: 50%;
-  background: #f3e4df;
-  color: #7d5458;
+  background: #fff0b5;
+  color: #111111;
   font-size: 40rpx;
   line-height: 60rpx;
 }
@@ -162,7 +162,7 @@
 .field-label {
   display: block;
   margin-bottom: 10rpx;
-  color: #4d4542;
+  color: #4d4328;
   font-size: 25rpx;
   font-weight: 600;
 }

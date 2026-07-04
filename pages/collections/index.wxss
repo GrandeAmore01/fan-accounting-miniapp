@@ -12,13 +12,13 @@
   margin-top: 24rpx;
   overflow: hidden;
   border-radius: 999rpx;
-  background: #f0e4df;
+  background: #f4e6a8;
 }
 
 .progress-fill {
   height: 100%;
   border-radius: 999rpx;
-  background: #c84d69;
+  background: #f5c400;
 }
 
 .toolbar {
@@ -32,10 +32,10 @@
   width: 100%;
   min-height: 72rpx;
   padding: 0 22rpx;
-  border: 1rpx solid #eadbd5;
+  border: 1rpx solid #e8d17b;
   border-radius: 12rpx;
   background: #ffffff;
-  color: #2d2928;
+  color: #252116;
   font-size: 26rpx;
   line-height: 72rpx;
 }
@@ -62,7 +62,7 @@
 }
 
 .price {
-  color: #c84d69;
+  color: #b48a00;
   font-size: 36rpx;
   font-weight: 700;
 }
@@ -78,5 +78,5 @@
 }
 
 .missing-text {
-  color: #877d7a;
+  color: #837965;
 }

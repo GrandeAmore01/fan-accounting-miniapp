@@ -12,6 +12,8 @@ function createDefaultFormData() {
     quantity: 1,
     date: '',
     paymentMethod: '微信支付',
+    seat: '',
+    location: '',
     remark: '',
     images: [],
     fees: {
@@ -34,11 +36,14 @@ function createDefaultFormData() {
 Page({
   data: {
     expenses: [],
+    categoryTabs: [{ id: 'all', name: '全部' }, ...expenseService.expenseCategories],
+    activeCategoryIndex: 0,
     categories: expenseService.expenseCategories,
     subTypes: [],
     filterCategories: [{ id: 'all', name: '全部分类' }, ...expenseService.expenseCategories],
     filterCategoryIndex: 0,
     keyword: '',
+    showActualAmount: false,
     paymentMethods: ['微信支付', '支付宝', '银行卡', '现金', '其他'],
     concertStages: [],
     concertStageIndex: 0,
@@ -59,6 +64,7 @@ Page({
       totalAmount: 0,
       count: 0
     },
+    categoryStats: [],
     budgetProgress: {
       percent: 0
     }
@@ -68,16 +74,45 @@ Page({
     this.refreshPage();
   },
 
-  refreshPage() {
-    const filterCategory = this.data.filterCategories[this.data.filterCategoryIndex].id;
-    this.setData({
-      expenses: expenseService.filterExpenses({
+  async refreshPage() {
+    const filterCategory = this.data.categoryTabs[this.data.activeCategoryIndex].id;
+    try {
+      const expenseList = await expenseService.filterExpensesAsync({
         category: filterCategory,
         keyword: this.data.keyword
-      }),
-      summary: expenseService.getExpenseSummary(),
-      budgetProgress: budgetService.getBudgetProgress()
-    });
+      });
+      const expenses = expenseList.map((item) => ({
+        ...item,
+        includedAmountText: expenseService.formatMoney(item.includedAmount),
+        totalAmountText: expenseService.formatMoney(item.totalAmount),
+        displayAmountLabel: this.data.showActualAmount ? '实际' : '计入',
+        displayAmountText: expenseService.formatMoney(
+          this.data.showActualAmount ? item.totalAmount : item.includedAmount
+        ),
+        metaText: [item.date, item.location, item.seat].filter(Boolean).join(' · ')
+      }));
+      const summary = await expenseService.getExpenseSummaryAsync();
+      const categoryStats = await expenseService.getCategoryStatsAsync();
+      this.setData({
+        expenses,
+        summary: {
+          ...summary,
+          totalAmountText: expenseService.formatMoney(summary.totalAmount),
+          actualAmountText: expenseService.formatMoney(summary.actualAmount)
+        },
+        categoryStats: categoryStats.map((item) => ({
+          ...item,
+          amountText: expenseService.formatMoney(item.amount),
+          actualAmountText: expenseService.formatMoney(item.actualAmount)
+        })),
+        budgetProgress: budgetService.getBudgetProgress()
+      });
+    } catch (error) {
+      wx.showToast({
+        title: error.message || '加载消费记录失败',
+        icon: 'none'
+      });
+    }
   },
 
   handleKeywordInput(event) {
@@ -88,8 +123,26 @@ Page({
   },
 
   handleFilterCategoryChange(event) {
+    const filterCategoryIndex = Number(event.detail.value);
     this.setData({
-      filterCategoryIndex: Number(event.detail.value)
+      filterCategoryIndex,
+      activeCategoryIndex: filterCategoryIndex
+    });
+    this.refreshPage();
+  },
+
+  handleCategoryTabChange(event) {
+    const activeCategoryIndex = Number(event.currentTarget.dataset.index);
+    this.setData({
+      activeCategoryIndex,
+      filterCategoryIndex: activeCategoryIndex
+    });
+    this.refreshPage();
+  },
+
+  handleShowActualAmountChange(event) {
+    this.setData({
+      showActualAmount: event.detail.value
     });
     this.refreshPage();
   },
@@ -97,14 +150,29 @@ Page({
   handleClearFilter() {
     this.setData({
       keyword: '',
-      filterCategoryIndex: 0
+      filterCategoryIndex: 0,
+      activeCategoryIndex: 0
     });
     this.refreshPage();
   },
 
   handleOpenCreate() {
+    const activeCategoryId = this.data.categoryTabs[this.data.activeCategoryIndex].id;
+    const categoryIndex =
+      activeCategoryId === 'all'
+        ? 0
+        : Math.max(this.data.categories.findIndex((item) => item.id === activeCategoryId), 0);
+    const category = this.data.categories[categoryIndex];
+    const firstSubType = (category.subTypes || [])[0] || {};
     const formData = {
       ...createDefaultFormData(),
+      category: category.id,
+      subType: firstSubType.id || '',
+      itemName: category.id === 'meet' ? firstSubType.name || '' : '',
+      amount: '',
+      stageId: '',
+      stageDate: '',
+      priceTier: '',
       date: this.getToday()
     };
     this.applyFormState({
@@ -112,7 +180,7 @@ Page({
       formMode: 'create',
       formTitle: '新增消费记录',
       formData,
-      categoryIndex: 0,
+      categoryIndex,
       subTypeIndex: 0,
       paymentMethodIndex: 0,
       searchKeyword: '',
@@ -198,6 +266,7 @@ Page({
           stageId: matchedStage.stageId,
           stageDate: matchedStage.date,
           itemName: matchedStage.stageName,
+          location: matchedStage.location || formData.location,
           amount: priceTiers.length ? String(priceTiers[0]) : formData.amount,
           priceTier: priceTiers.length ? String(priceTiers[0]) : ''
         }
@@ -303,6 +372,7 @@ Page({
           'formData.stageId': matchedStage.stageId,
           'formData.stageDate': matchedStage.date,
           'formData.itemName': matchedStage.stageName,
+          'formData.location': matchedStage.location || '',
           'formData.amount': priceTiers.length ? String(priceTiers[0]) : '',
           'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : '',
           concertStageIndex: Math.max(
@@ -323,6 +393,7 @@ Page({
         'formData.stageId': '',
         'formData.stageDate': '',
         'formData.itemName': this.data.matchedMeetStageName ? fallbackName : this.data.formData.itemName || fallbackName,
+        'formData.location': this.data.matchedMeetStageName ? '' : this.data.formData.location,
         'formData.amount': '',
         'formData.priceTier': '',
         priceTiers: [],
@@ -352,6 +423,7 @@ Page({
       'formData.stageDate': stage.date,
       'formData.date': stage.date,
       'formData.itemName': stage.stageName,
+      'formData.location': stage.location || '',
       'formData.amount': priceTiers.length ? String(priceTiers[0]) : '',
       'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : ''
     });
@@ -372,9 +444,10 @@ Page({
 
   handleOutfieldChange(event) {
     const outfieldOnly = event.detail.value;
+    const isConcert = this.data.formData.category === 'meet' && this.data.formData.subType === 'concert';
     this.setData({
       'formData.outfieldOnly': outfieldOnly,
-      'formData.includeInTotal': !outfieldOnly
+      'formData.includeInTotal': isConcert ? true : !outfieldOnly
     });
   },
 
@@ -447,11 +520,11 @@ Page({
     });
   },
 
-  handleSubmitForm() {
+  async handleSubmitForm() {
     const result =
       this.data.formMode === 'edit'
-        ? expenseService.updateExpense(this.data.formData.expenseId, this.data.formData)
-        : expenseService.addExpense(this.data.formData);
+        ? await expenseService.updateExpenseAsync(this.data.formData.expenseId, this.data.formData)
+        : await expenseService.addExpenseAsync(this.data.formData);
 
     if (!result.valid) {
       wx.showToast({
@@ -477,17 +550,24 @@ Page({
       title: '删除消费记录',
       content: '删除后无法在本地恢复，确定要删除吗？',
       confirmText: '删除',
-      confirmColor: '#c84d69',
-      success: (res) => {
+      confirmColor: '#9c4f00',
+      success: async (res) => {
         if (!res.confirm) {
           return;
         }
-        expenseService.removeExpense(expenseId);
-        wx.showToast({
-          title: '已删除',
-          icon: 'success'
-        });
-        this.refreshPage();
+        try {
+          await expenseService.removeExpenseAsync(expenseId);
+          wx.showToast({
+            title: '已删除',
+            icon: 'success'
+          });
+          this.refreshPage();
+        } catch (error) {
+          wx.showToast({
+            title: error.message || '删除失败',
+            icon: 'none'
+          });
+        }
       }
     });
   },

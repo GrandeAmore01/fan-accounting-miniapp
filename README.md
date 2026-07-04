@@ -12,6 +12,7 @@ https://github.com/GrandeAmore01/fan-accounting-miniapp
 - `assets/`: 图片、图标等静态资源
 - `data/`: 示例数据或本地数据文件
 - `docs/`: 项目文档
+- `server/`: Node.js + Express + MySQL 后端服务，第一阶段提供消费记录 REST API
 
 ## 组员协作方式
 

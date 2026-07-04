@@ -17,8 +17,8 @@
   width: 104rpx;
   height: 104rpx;
   border-radius: 50%;
-  background: #c84d69;
-  color: #ffffff;
+  background: #f5c400;
+  color: #111111;
   font-size: 40rpx;
   font-weight: 700;
 }
@@ -43,7 +43,7 @@
 }
 
 .status-off {
-  color: #877d7a;
+  color: #837965;
 }
 
 .data-grid {
@@ -56,7 +56,7 @@
 .data-cell {
   min-height: 132rpx;
   padding: 22rpx;
-  border: 1rpx solid #eadbd5;
+  border: 1rpx solid #e8d17b;
   border-radius: 14rpx;
   background: #ffffff;
 }
@@ -66,5 +66,5 @@
 }
 
 .danger-button {
-  color: #a13f3f;
+  color: #9c4f00;
 }

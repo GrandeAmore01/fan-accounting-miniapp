@@ -8,15 +8,15 @@
   ],
   "window": {
     "navigationBarTitleText": "粉丝消费收藏管理",
-    "navigationBarBackgroundColor": "#f8f3ef",
+    "navigationBarBackgroundColor": "#fff8d8",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#f7f5f2",
+    "backgroundColor": "#fffaf0",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
-    "color": "#7a7270",
-    "selectedColor": "#c84d69",
-    "backgroundColor": "#fffaf7",
+    "color": "#6f6758",
+    "selectedColor": "#b48a00",
+    "backgroundColor": "#fff8d8",
     "borderStyle": "white",
     "list": [
       {
