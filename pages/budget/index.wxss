@@ -23,11 +23,15 @@
 }
 
 .compact-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 180rpx;
   height: 64rpx;
   margin: 0;
   font-size: 25rpx;
-  line-height: 64rpx;
+  line-height: 1;
+  text-align: center;
 }
 
 .progress-track,
@@ -134,25 +138,48 @@
 
 .modal-panel {
   width: 100%;
-  padding: 30rpx;
+  max-height: 88vh;
+  padding: 0 30rpx 30rpx;
+  overflow-y: auto;
   border-radius: 20rpx 20rpx 16rpx 16rpx;
   background: #fffdf7;
 }
 
 .modal-header {
-  margin-bottom: 18rpx;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -30rpx 18rpx;
+  padding: 28rpx 30rpx 20rpx;
+  border-bottom: 1rpx solid #f1e4b6;
+  background: #fffdf7;
 }
 
 .close-button {
+  display: flex;
+  flex: 0 0 64rpx;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
   width: 64rpx;
+  min-width: 64rpx;
+  max-width: 64rpx;
   height: 64rpx;
+  min-height: 64rpx;
+  max-height: 64rpx;
   margin: 0;
   padding: 0;
+  border: 0;
   border-radius: 50%;
   background: #fff0b5;
   color: #111111;
   font-size: 40rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  text-align: center;
+}
+
+.close-button::after {
+  border: 0;
 }
 
 .form-field {

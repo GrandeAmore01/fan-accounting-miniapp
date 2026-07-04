@@ -4,6 +4,7 @@
     "pages/budget/index",
     "pages/collections/index",
     "pages/stages/index",
+    "pages/memories/index",
     "pages/profile/index"
   ],
   "window": {

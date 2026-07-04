@@ -47,10 +47,14 @@ function filterCollections(filter) {
   });
 }
 
-function setCollectionOwned(collectionId, isOwned) {
+function setCollectionOwned(collectionId, isOwned, options = {}) {
   const userCollections = storageService.getCollection(USER_ID, 'userCollections');
   const exists = userCollections.find((item) => item.collectionId === collectionId);
   if (exists) {
+    if (!isOwned && options.deleteExpense && exists.expenseId) {
+      expenseService.removeExpense(exists.expenseId);
+      exists.expenseId = '';
+    }
     exists.isOwned = isOwned;
     exists.lightTime = isOwned ? new Date().toISOString() : '';
   } else {
@@ -73,8 +77,8 @@ function lightCollection(collectionId) {
   return setCollectionOwned(collectionId, true);
 }
 
-function unlightCollection(collectionId) {
-  return setCollectionOwned(collectionId, false);
+function unlightCollection(collectionId, options = {}) {
+  return setCollectionOwned(collectionId, false, options);
 }
 
 function createExpenseFromCollection(collectionId) {

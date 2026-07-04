@@ -121,7 +121,7 @@
     <view class="modal-panel" catchtap="noop">
       <view class="row modal-header">
         <text class="card-title">{{formTitle}}</text>
-        <button class="close-button" bindtap="handleCloseForm">×</button>
+        <view class="close-button" bindtap="handleCloseForm">×</view>
       </view>
 
       <view class="field-grid">

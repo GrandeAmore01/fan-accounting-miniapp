@@ -47,10 +47,14 @@
 }
 
 .compact-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 64rpx;
   margin: 0;
   font-size: 25rpx;
-  line-height: 64rpx;
+  line-height: 1;
+  text-align: center;
 }
 
 .collection-card {

@@ -67,7 +67,7 @@
     <view class="modal-panel" catchtap="noop">
       <view class="row modal-header">
         <text class="card-title">设置{{budgetTypes[budgetTypeIndex].name}}</text>
-        <button class="close-button" bindtap="handleCloseBudgetForm">×</button>
+        <view class="close-button" bindtap="handleCloseBudgetForm">×</view>
       </view>
 
       <view class="form-field">

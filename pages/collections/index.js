@@ -103,18 +103,25 @@ Page({
 
   handleUnlightCollection(event) {
     const { id } = event.currentTarget.dataset;
+    const collection = this.data.collections.find((item) => item.collectionId === id);
+    const hasLinkedExpense = Boolean(collection && collection.expenseId);
     wx.showModal({
       title: '取消点亮',
-      content: '取消后仅更新图鉴状态，不会自动删除已生成的消费记录。',
-      confirmText: '取消点亮',
+      content: hasLinkedExpense
+        ? '取消点亮后，是否同时删除这条藏品同步生成的消费记录？'
+        : '取消后仅更新图鉴状态。',
+      cancelText: hasLinkedExpense ? '保留记录' : '再想想',
+      confirmText: hasLinkedExpense ? '删除记录' : '取消点亮',
       confirmColor: '#c84d69',
       success: (res) => {
-        if (!res.confirm) {
+        if (!res.confirm && !hasLinkedExpense) {
           return;
         }
-        collectionService.unlightCollection(id);
+        collectionService.unlightCollection(id, {
+          deleteExpense: hasLinkedExpense && res.confirm
+        });
         wx.showToast({
-          title: '已取消',
+          title: hasLinkedExpense && res.confirm ? '已删除记录' : '已取消',
           icon: 'success'
         });
         this.refreshPage();

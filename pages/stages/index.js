@@ -23,6 +23,20 @@ Page({
       unlockedSongCount: 0,
       progressPercent: 0
     },
+    meetTimeline: {
+      hasMeetStages: false,
+      lastMeet: {
+        daysText: '--',
+        dateText: '暂无记录',
+        stageName: ''
+      },
+      nextMeet: {
+        daysText: '--',
+        dateText: '暂无记录',
+        stageName: ''
+      },
+      firstMeetDateText: '暂无记录'
+    },
     songStats: [],
     albumProgress: []
   },
@@ -39,6 +53,7 @@ Page({
       keyword: this.data.keyword
     });
     this.setData({
+      meetTimeline: dashboard.meetTimeline,
       stages: dashboard.stages,
       stats: dashboard.stats,
       songStats: dashboard.songStats,
@@ -84,30 +99,112 @@ Page({
     this.refreshPage();
   },
 
+  handleOpenMeetMemory() {
+    const type = this.data.stageTypeOptions[this.data.stageTypeIndex].id;
+    wx.navigateTo({
+      url: `/pages/memories/index?type=${type}`
+    });
+  },
+
   handleLightStage(event) {
     const { id } = event.currentTarget.dataset;
-    stageService.lightStage(id);
+    const result = stageService.lightStage(id);
+    if (!result.valid) {
+      wx.showToast({
+        title: result.message,
+        icon: 'none'
+      });
+      return;
+    }
+    const stage = result.data || this.data.stages.find((item) => item.stageId === id);
+    if (stage && stage.expenseId) {
+      wx.showToast({
+        title: '已点亮',
+        icon: 'success'
+      });
+      this.refreshPage();
+      return;
+    }
+
+    wx.showModal({
+      title: '同步消费记录',
+      content: '已点亮该场次，是否按票档同步生成一条消费记录？',
+      cancelText: '仅点亮',
+      confirmText: '生成记录',
+      confirmColor: '#c84d69',
+      success: (res) => {
+        if (!res.confirm) {
+          wx.showToast({
+            title: '已点亮',
+            icon: 'success'
+          });
+          this.refreshPage();
+          return;
+        }
+        this.handleCreateExpenseFromStage(stage);
+      }
+    });
+  },
+
+  handleCreateExpenseFromStage(stage) {
+    if (!stage) {
+      wx.showToast({
+        title: '舞台场次不存在',
+        icon: 'none'
+      });
+      this.refreshPage();
+      return;
+    }
+    const priceTiers = stage && stage.priceTiers ? stage.priceTiers : [];
+    if (priceTiers.length > 1) {
+      wx.showActionSheet({
+        itemList: priceTiers.map((price) => `${price} 元`),
+        success: (res) => {
+          this.createExpenseFromStage(stage.stageId, priceTiers[res.tapIndex]);
+        },
+        fail: () => {
+          wx.showToast({
+            title: '已点亮',
+            icon: 'success'
+          });
+          this.refreshPage();
+        }
+      });
+      return;
+    }
+    this.createExpenseFromStage(stage.stageId, priceTiers[0]);
+  },
+
+  createExpenseFromStage(stageId, priceTier) {
+    const expenseResult = stageService.createExpenseFromStage(stageId, priceTier);
     wx.showToast({
-      title: '已点亮',
-      icon: 'success'
+      title: expenseResult.valid ? '已生成记录' : expenseResult.message,
+      icon: expenseResult.valid ? 'success' : 'none'
     });
     this.refreshPage();
   },
 
   handleUnlightStage(event) {
     const { id } = event.currentTarget.dataset;
+    const stage = this.data.stages.find((item) => item.stageId === id);
+    const hasLinkedExpense = Boolean(stage && stage.expenseId);
     wx.showModal({
       title: '取消点亮',
-      content: '取消后会同步更新歌曲统计和专辑进度，确定要取消吗？',
-      confirmText: '取消点亮',
+      content: hasLinkedExpense
+        ? '取消点亮后，是否同时删除这条舞台同步生成的消费记录？'
+        : '取消后会同步更新歌曲统计和专辑进度，确定要取消吗？',
+      cancelText: hasLinkedExpense ? '保留记录' : '再想想',
+      confirmText: hasLinkedExpense ? '删除记录' : '取消点亮',
       confirmColor: '#c84d69',
       success: (res) => {
-        if (!res.confirm) {
+        if (!res.confirm && !hasLinkedExpense) {
           return;
         }
-        stageService.unlightStage(id);
+        stageService.unlightStage(id, {
+          deleteExpense: hasLinkedExpense && res.confirm
+        });
         wx.showToast({
-          title: '已取消',
+          title: hasLinkedExpense && res.confirm ? '已删除记录' : '已取消',
           icon: 'success'
         });
         this.refreshPage();

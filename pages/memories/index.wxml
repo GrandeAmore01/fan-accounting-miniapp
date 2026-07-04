@@ -1,0 +1,59 @@
+<view class="page memory-page">
+  <view class="memory-tabs">
+    <view
+      wx:for="{{typeOptions}}"
+      wx:key="id"
+      class="memory-tab {{activeTypeIndex === index ? 'memory-tab-active' : ''}}"
+      data-index="{{index}}"
+      bindtap="handleTypeChange"
+    >{{item.name}}</view>
+  </view>
+
+  <view class="memory-card intro-card">
+    <text class="memory-eyebrow">见面记忆</text>
+    <text class="memory-title">小粉丝你好！</text>
+    <block wx:if="{{report.hasRecords}}">
+      <text class="memory-line">你已经在{{report.typeName}}上见面 <text class="highlight">{{report.meetCount}}</text> 次啦！</text>
+      <text class="memory-line">你已经走过 <text class="highlight">{{report.cityCount}}</text> 个城市，场馆累计 <text class="highlight">{{report.venueCount}}</text> 座。</text>
+      <text class="memory-line">去过最多的城市是 <text class="highlight">{{report.topCity.name}}</text>，一共 <text class="highlight">{{report.topCity.count}}</text> 次。</text>
+      <text class="memory-line">你第一次走进的是 <text class="highlight">{{report.firstCityName}}</text> 的 <text class="highlight">{{report.firstVenueName}}</text>。</text>
+      <text class="memory-line">去过最多的场馆是 <text class="highlight">{{report.topVenue.name}}</text>，这座场馆见证了 <text class="highlight">{{report.topVenue.count}}</text> 次见面。</text>
+      <view class="memory-date-row">
+        <text class="date-pill">最早：{{report.earliestDateText}}</text>
+        <text class="date-pill">最近：{{report.latestDateText}}</text>
+      </view>
+    </block>
+    <block wx:else>
+      <text class="memory-line">还没有点亮{{report.typeName}}见面记录。</text>
+      <text class="memory-line">去舞台记录里点亮看过的场次后，这里会生成你的专属足迹。</text>
+    </block>
+  </view>
+
+  <view class="memory-card">
+    <view class="section-head">
+      <text class="section-title">城市足迹</text>
+      <text class="section-hint">次数优先 · 最近一次见面优先</text>
+    </view>
+    <view wx:if="{{report.cityRanking.length === 0}}" class="empty">暂无城市足迹</view>
+    <view class="rank-item" wx:for="{{report.cityRanking}}" wx:key="name">
+      <text class="rank-badge">{{item.rank}}</text>
+      <text class="rank-name">{{item.name}}</text>
+      <text class="rank-count">{{item.count}} 次</text>
+    </view>
+  </view>
+
+  <view class="memory-card">
+    <view class="section-head">
+      <text class="section-title">场馆统计</text>
+      <text class="section-hint">按场馆累计 · 最近一次见面优先</text>
+    </view>
+    <view wx:if="{{report.venueRanking.length === 0}}" class="empty">暂无场馆统计</view>
+    <view class="rank-item" wx:for="{{report.venueRanking}}" wx:key="name">
+      <text class="rank-badge">{{item.rank}}</text>
+      <text class="rank-name">{{item.name}}</text>
+      <text class="rank-count">{{item.count}} 次</text>
+    </view>
+  </view>
+
+  <button class="memory-back-button" bindtap="handleBackHome">返回舞台记录</button>
+</view>
