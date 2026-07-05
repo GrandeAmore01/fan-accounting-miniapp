@@ -1,5 +1,13 @@
 # Fan Accounting Miniapp
 
+## 协作开发说明
+
+- `main` 是稳定分支，不要直接在 `main` 上开发或 push。
+- 所有人通过自己的 `feature/*` 分支开发。
+- 所有合并必须走 Pull Request，由组长检查后再合并。
+- `app.json`、`app.js`、`app.wxss`、`project.config.json`、`data/`、`services/`、`server/` 等公共文件不要随便改。
+- 详细规则见 `CONTRIBUTING.md` 和 `GIT_WORKFLOW.md`。
+
 软件课设计账小程序，用于课程设计开发与小组协作版本管理。
 
 GitHub 仓库地址：
