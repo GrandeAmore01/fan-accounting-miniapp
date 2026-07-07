@@ -1,6 +1,6 @@
 <view class="page">
   <text class="page-title">舞台记录</text>
-  <text class="page-subtitle">点亮看过或补档过的舞台，自动统计已解锁歌曲和专辑场次进度。</text>
+  <text class="page-subtitle">点亮看过或补档过的舞台，自动统计已解锁歌曲和专辑歌曲进度。</text>
 
   <view class="meet-timeline" wx:if="{{meetTimeline.hasMeetStages}}">
     <view class="meet-card">
@@ -50,7 +50,7 @@
         bindtap="handleStageTypeChange"
       >{{item.name}}</view>
     </view>
-    <input class="search-input" value="{{keyword}}" placeholder="搜索场次、地点或歌曲" bindinput="handleKeywordInput" />
+    <input class="search-input" value="{{keyword}}" placeholder="搜索歌曲、场次或城市" bindinput="handleKeywordInput" />
     <view class="filter-grid">
       <picker mode="selector" range="{{yearOptions}}" range-key="name" value="{{yearIndex}}" bindchange="handleYearChange">
         <view class="picker-field">{{yearOptions[yearIndex].name}}</view>
@@ -62,42 +62,88 @@
     <button class="secondary-button compact-button" bindtap="handleClearFilter">重置筛选</button>
   </view>
 
-  <view class="card" wx:if="{{stages.length === 0}}">
+  <view class="card" wx:if="{{keyword && songSearchResults.length > 0}}">
+    <text class="card-title">歌曲搜索匹配</text>
+    <view class="song-search-group" wx:for="{{songSearchResults}}" wx:key="songName">
+      <text class="song-name">{{item.songName}}</text>
+      <view class="song-stage-row" wx:for="{{item.stages}}" wx:for-item="stageItem" wx:key="stageId">
+        <text class="muted">{{stageItem.date}} · {{stageItem.cityName}} · {{stageItem.stageName}}</text>
+        <button
+          wx:if="{{stageItem.isLighted}}"
+          class="secondary-button mini-button"
+          data-stage-id="{{stageItem.stageId}}"
+          data-lighted="true"
+          bindtap="handleSongStageAction"
+        >查看</button>
+        <button
+          wx:else
+          class="primary-button mini-button"
+          data-stage-id="{{stageItem.stageId}}"
+          data-lighted="false"
+          bindtap="handleSongStageAction"
+        >去点亮</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{stages.length === 0 && !loading}}">
     <view class="empty">暂无符合条件的舞台场次。</view>
   </view>
 
-  <view class="card stage-card" wx:for="{{stages}}" wx:key="stageId">
+  <view class="card stage-card" wx:for="{{stages}}" wx:key="stageId" data-id="{{item.stageId}}" bindtap="handleOpenDetail">
     <view class="row">
       <text class="card-title">{{item.stageName}}</text>
       <text class="tag">{{item.year}}</text>
     </view>
     <view class="row info-row">
-      <text class="muted">{{item.date}} · {{item.location}}</text>
+      <text class="muted">{{item.date}} · {{item.cityName}} · {{item.venueName}}</text>
       <text class="{{item.isLighted ? 'lighted-text' : 'unlighted-text'}}">{{item.isLighted ? '已点亮' : '未点亮'}}</text>
     </view>
-    <text class="muted">歌曲数：{{item.songCount}} · 专辑：{{item.albumName}}</text>
-    <text class="muted">歌单：{{item.songListText}}</text>
-    <text class="muted" wx:if="{{item.expenseId}}">已同步消费记录：{{item.expenseId}}</text>
-    <button wx:if="{{item.isLighted}}" class="secondary-button" data-id="{{item.stageId}}" bindtap="handleUnlightStage">取消点亮</button>
-    <button wx:else class="primary-button" data-id="{{item.stageId}}" bindtap="handleLightStage">点亮舞台</button>
-  </view>
-
-  <view class="card">
-    <text class="card-title">歌曲出现统计</text>
-    <view wx:if="{{songStats.length === 0}}" class="empty">点亮舞台后会统计已解锁歌曲。</view>
-    <view class="song-item" wx:for="{{songStats}}" wx:key="songName">
-      <text class="song-name">{{item.songName}}</text>
-      <text class="tag">{{item.count}} 次</text>
+    <text class="muted">涉及专辑：{{item.albumNamesText || item.albumNameCn || item.albumName}}</text>
+    <text class="muted">歌单预览：{{item.songPreviewText || item.songListText}}</text>
+    <text class="muted" wx:if="{{item.photoCount > 0}}">{{item.photoCountText}}</text>
+    <view class="card-actions" catchtap="stopTap">
+      <button wx:if="{{item.isLighted}}" class="secondary-button" data-id="{{item.stageId}}" bindtap="handleUnlightStage">取消点亮</button>
+      <button wx:else class="primary-button" data-id="{{item.stageId}}" bindtap="handleLightStage">点亮舞台</button>
+      <button class="secondary-button" data-id="{{item.stageId}}" bindtap="handleOpenDetail">查看详情</button>
     </view>
   </view>
 
   <view class="card">
-    <text class="card-title">专辑场次进度</text>
-    <view wx:if="{{albumProgress.length === 0}}" class="empty">暂无可统计的专辑场次。</view>
+    <view class="section-head">
+      <text class="card-title">按年份统计</text>
+      <picker mode="selector" range="{{statsYearOptions}}" range-key="name" value="{{statsYearIndex}}" bindchange="handleStatsYearChange">
+        <view class="picker-field compact-picker">{{statsYearOptions[statsYearIndex].name}}</view>
+      </picker>
+    </view>
+    <block wx:if="{{yearStats.hasRecords}}">
+      <view class="stats-grid">
+        <view class="stats-item"><text class="muted">点亮场次</text><text class="metric">{{yearStats.lightedCount}}</text></view>
+        <view class="stats-item"><text class="muted">解锁歌曲</text><text class="metric">{{yearStats.unlockedSongCount}}</text></view>
+        <view class="stats-item"><text class="muted">城市数</text><text class="metric">{{yearStats.cityCount}}</text></view>
+        <view class="stats-item"><text class="muted">歌曲出现</text><text class="metric">{{yearStats.songAppearCount}}</text></view>
+      </view>
+      <text class="muted section-gap">当年常听歌曲</text>
+      <view class="song-item" wx:for="{{yearStats.topSongs}}" wx:key="songName">
+        <text class="song-name">{{item.songName}}</text>
+        <text class="tag">{{item.count}} 次</text>
+      </view>
+      <text class="muted section-gap">当年点亮场次</text>
+      <view class="year-stage-item" wx:for="{{yearStats.stages}}" wx:key="stageId" data-id="{{item.stageId}}" bindtap="handleOpenDetail">
+        <text class="song-name">{{item.stageName}}</text>
+        <text class="muted">{{item.date}} · {{item.cityName}}</text>
+      </view>
+    </block>
+    <view wx:else class="empty">该年份还没有点亮场次，先去上方列表点亮吧。</view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">专辑歌曲进度</text>
+    <view wx:if="{{albumProgress.length === 0}}" class="empty">暂无可统计的专辑歌曲。</view>
     <view class="album-item" wx:for="{{albumProgress}}" wx:key="albumId">
       <view class="row">
-        <text class="song-name">{{item.albumId}}</text>
-        <text class="muted">{{item.lightedCount}}/{{item.total}} · {{item.percent}}%</text>
+        <text class="song-name">{{item.albumName}}</text>
+        <text class="muted">{{item.unlockedCount}}/{{item.total}} 首 · {{item.percent}}%</text>
       </view>
       <view class="mini-track">
         <view class="mini-fill" style="width: {{item.percent}}%;"></view>

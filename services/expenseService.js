@@ -174,6 +174,9 @@ function validateExpense(expense) {
 function syncStageLight(expense) {
   if (expense.category === 'meet' && expense.stageId) {
     stageService.lightStage(expense.stageId);
+    if (expense.expenseId) {
+      stageService.linkStageExpense(expense.stageId, expense.expenseId);
+    }
   }
 }
 
@@ -205,9 +208,14 @@ function updateExpense(expenseId, expense) {
 }
 
 function removeExpense(expenseId) {
-  const expenses = storageService.getCollection(USER_ID, 'expenses').filter((item) => item.expenseId !== expenseId);
-  storageService.setCollection(USER_ID, 'expenses', expenses);
-  return expenses;
+  const expenses = storageService.getCollection(USER_ID, 'expenses');
+  const removed = expenses.find((item) => item.expenseId === expenseId);
+  const nextExpenses = expenses.filter((item) => item.expenseId !== expenseId);
+  storageService.setCollection(USER_ID, 'expenses', nextExpenses);
+  if (removed && removed.stageId) {
+    stageService.clearStageExpenseLink(removed.stageId, expenseId);
+  }
+  return nextExpenses;
 }
 
 function filterExpenses(filter) {
