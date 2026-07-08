@@ -66,26 +66,59 @@ router.post('/', async (req, res, next) => {
     }
 
     const params = expenseToParams(expense);
-    await pool.execute(
-      `INSERT INTO expenses (
-         expense_id, user_id, category, sub_type, item_name, amount, quantity,
-         expense_date, payment_method, seat, location, remark, images_json,
-         fees_json, outfield_only, include_in_total, collection_id, stage_id,
-         stage_date, price_tier, base_amount, total_amount, included_amount
-       ) VALUES (
-         :expenseId, :userId, :category, :subType, :itemName, :amount, :quantity,
-         :expenseDate, :paymentMethod, :seat, :location, :remark, :imagesJson,
-         :feesJson, :outfieldOnly, :includeInTotal, :collectionId, :stageId,
-         :stageDate, :priceTier, :baseAmount, :totalAmount, :includedAmount
-       )`,
-      params
-    );
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+    
+      await connection.execute(
+        `INSERT INTO expenses (
+          expense_id, user_id, category, sub_type, item_name, amount, quantity,
+          expense_date, payment_method, seat, location, remark, images_json,
+          fees_json, outfield_only, include_in_total, collection_id, stage_id,
+          stage_date, price_tier, base_amount, total_amount, included_amount,
+          city, purchase_channel, pricing_mode, reference_price, unit_price, expense_source
+        ) VALUES (
+          :expenseId, :userId, :category, :subType, :itemName, :amount, :quantity,
+          :expenseDate, :paymentMethod, :seat, :location, :remark, :imagesJson,
+          :feesJson, :outfieldOnly, :includeInTotal, :collectionId, :stageId,
+          :stageDate, :priceTier, :baseAmount, :totalAmount, :includedAmount,
+          :city, :purchaseChannel, :pricingMode, :referencePrice, :unitPrice, :expenseSource
+        )`,
+        params
+      );
+    
+      if (expense.category === 'collection' && expense.collectionId) {
+        await connection.execute(
+          `INSERT INTO user_collections (
+             user_id, collection_id, is_owned, light_time
+           ) VALUES (?, ?, 1, NOW())
+           ON DUPLICATE KEY UPDATE
+             is_owned = 1,
+             light_time = COALESCE(light_time, NOW())`,
+          [expense.userId, expense.collectionId]
+        );
+      }
+    
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
 
     return res.status(201).json({
       ok: true,
       data: expense
     });
   } catch (error) {
+    // 捕获主键重复：expense_id 已存在
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({
+        ok: false,
+        message: '该消费记录已存在，请勿重复提交'
+      });
+    }
     next(error);
   }
 });
@@ -125,6 +158,12 @@ router.put('/:expenseId', async (req, res, next) => {
            stage_id = :stageId,
            stage_date = :stageDate,
            price_tier = :priceTier,
+           city = :city,
+           purchase_channel = :purchaseChannel,
+           pricing_mode = :pricingMode,
+           reference_price = :referencePrice,
+           unit_price = :unitPrice,
+           expense_source = :expenseSource,
            base_amount = :baseAmount,
            total_amount = :totalAmount,
            included_amount = :includedAmount
