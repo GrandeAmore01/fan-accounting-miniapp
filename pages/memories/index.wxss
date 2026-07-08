@@ -114,6 +114,13 @@
   text-align: right;
 }
 
+.block-hint {
+  display: block;
+  margin-top: 8rpx;
+  text-align: left;
+  line-height: 1.5;
+}
+
 .rank-item {
   display: grid;
   grid-template-columns: 64rpx 1fr auto;

@@ -67,17 +67,25 @@ Page({
 
   handleNoteInput(event) {
     const { field } = event.currentTarget.dataset;
+    let value = event.detail.value;
+    if (field === 'actualTicketPrice') {
+      value = String(value || '').replace(/[^\d]/g, '');
+    }
     this.setData({
-      [`noteForm.${field}`]: event.detail.value
+      [`noteForm.${field}`]: value
     });
   },
 
   handleSaveNote() {
     const { noteForm, stageId, detail } = this.data;
-    stageService.saveStageNote(stageId, {
+    const result = stageService.saveStageNote(stageId, {
       ...noteForm,
       photos: detail.note.photos || []
     });
+    if (!result.valid) {
+      wx.showToast({ title: result.message, icon: 'none' });
+      return;
+    }
     wx.showToast({ title: '已保存', icon: 'success' });
     this.setData({ editingNote: false });
     this.loadDetail();

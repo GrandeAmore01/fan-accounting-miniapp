@@ -18,12 +18,14 @@
     </view>
     <block wx:if="{{annualReport.hasRecords}}">
       <text class="memory-line">{{annualReport.year}} 年你一共见面 <text class="highlight">{{annualReport.meetCount}}</text> 次。</text>
-      <text class="memory-line">解锁歌曲 <text class="highlight">{{annualReport.unlockedSongCount}}</text> 首，走过 <text class="highlight">{{annualReport.cityCount}}</text> 个城市。</text>
+      <text class="memory-line">本年度解锁歌曲 <text class="highlight">{{annualReport.unlockedSongCount}}</text> 首，走过 <text class="highlight">{{annualReport.cityCount}}</text> 个城市。</text>
       <text class="memory-line">舞台相关花费 <text class="highlight">{{annualReport.stageSpending}}</text> 元，关联消费 <text class="highlight">{{annualReport.expenseCount}}</text> 笔。</text>
       <text class="memory-line">歌曲累计出现 <text class="highlight">{{annualReport.songAppearCount}}</text> 次，常去城市是 <text class="highlight">{{annualReport.topCity.name}}</text>。</text>
+      <text class="muted section-gap">本年度常听歌曲</text>
+      <text class="section-hint block-hint">仅统计 {{annualReport.year}} 年、{{typeOptions[activeTypeIndex].name}}已点亮场次</text>
       <view class="song-item" wx:for="{{annualReport.topSongs}}" wx:key="songName">
         <text class="song-name">{{item.songName}}</text>
-        <text class="tag">{{item.count}} 次</text>
+        <text class="tag">本年 {{item.count}} 次</text>
       </view>
     </block>
     <block wx:else>
@@ -36,7 +38,7 @@
       <text class="section-title">我的观演日历</text>
       <text class="section-hint">{{yearOptions[yearIndex].name}}</text>
     </view>
-    <view wx:if="{{calendar.length === 0}}" class="empty">该年份暂无已点亮场次。</view>
+    <view wx:if="{{calendar.length === 0}}" class="empty">该年份暂无已点亮场次，去舞台记录页点亮后这里会显示观演安排。</view>
     <view class="calendar-month" wx:for="{{calendar}}" wx:key="month">
       <view class="row">
         <text class="song-name">{{item.monthLabel}}</text>
@@ -51,15 +53,16 @@
 
   <view class="memory-card">
     <view class="section-head">
-      <text class="section-title">歌单收藏</text>
+      <text class="section-title">全历程歌单收藏</text>
       <text class="section-hint">已听 {{songCollection.heardCount}} / 曲库 {{songCollection.libraryCount}}</text>
     </view>
+    <text class="section-hint block-hint">统计所有年份已点亮场次，不随上方年份切换</text>
     <view wx:if="{{songCollection.isComplete}}" class="empty">恭喜，曲库里的歌你都听过啦！</view>
-    <text class="muted section-gap">最常听到的歌</text>
-    <view wx:if="{{songCollection.topHeardSongs.length === 0}}" class="empty">点亮场次后会统计常听歌曲。</view>
+    <text class="muted section-gap">历年最常听到的歌</text>
+    <view wx:if="{{songCollection.topHeardSongs.length === 0}}" class="empty">点亮场次后会统计历年常听歌曲。</view>
     <view class="song-item" wx:for="{{songCollection.topHeardSongs}}" wx:key="songName">
       <text class="song-name">{{item.songName}}</text>
-      <text class="tag">{{item.count}} 次</text>
+      <text class="tag">累计 {{item.count}} 次</text>
     </view>
     <text class="muted section-gap">还没听过的歌</text>
     <view wx:if="{{songCollection.unheardSongs.length === 0 && songCollection.heardCount > 0}}" class="empty">当前没有未听歌曲。</view>

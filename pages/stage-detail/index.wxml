@@ -37,17 +37,29 @@
       <text class="link-text" bindtap="handleToggleNoteEdit">{{editingNote ? '取消' : '编辑'}}</text>
     </view>
     <block wx:if="{{editingNote}}">
-      <input class="field-input" placeholder="座位" value="{{noteForm.seat}}" data-field="seat" bindinput="handleNoteInput" />
-      <input class="field-input" placeholder="同行人，多个用逗号分隔" value="{{noteForm.companions}}" data-field="companions" bindinput="handleNoteInput" />
-      <input class="field-input" type="digit" placeholder="实际票价" value="{{noteForm.actualTicketPrice}}" data-field="actualTicketPrice" bindinput="handleNoteInput" />
-      <textarea class="field-textarea" placeholder="观演感受" value="{{noteForm.note}}" data-field="note" bindinput="handleNoteInput" />
+      <view class="form-field">
+        <text class="field-label">座位</text>
+        <input class="field-input" placeholder="填写座位区域或排号" value="{{noteForm.seat}}" data-field="seat" bindinput="handleNoteInput" />
+      </view>
+      <view class="form-field">
+        <text class="field-label">同行人</text>
+        <input class="field-input" placeholder="多个用逗号分隔" value="{{noteForm.companions}}" data-field="companions" bindinput="handleNoteInput" />
+      </view>
+      <view class="form-field">
+        <text class="field-label">实际票价</text>
+        <input class="field-input" type="digit" placeholder="仅数字，大于 0" value="{{noteForm.actualTicketPrice}}" data-field="actualTicketPrice" bindinput="handleNoteInput" />
+      </view>
+      <view class="form-field">
+        <text class="field-label">观演感受</text>
+        <textarea class="field-textarea" placeholder="记录这场演出的感受" value="{{noteForm.note}}" data-field="note" bindinput="handleNoteInput" />
+      </view>
       <button class="primary-button" bindtap="handleSaveNote">保存备注</button>
     </block>
     <block wx:else>
       <view class="info-line"><text class="info-label">座位</text><text>{{detail.note.seat || '未填写'}}</text></view>
       <view class="info-line"><text class="info-label">同行人</text><text>{{detail.note.companions || '未填写'}}</text></view>
       <view class="info-line"><text class="info-label">实际票价</text><text>{{detail.note.actualTicketPrice ? detail.note.actualTicketPrice + ' 元' : '未填写'}}</text></view>
-      <view class="info-line"><text class="info-label">观演感受</text><text>{{detail.note.note || '未填写'}}</text></view>
+      <view class="info-line info-line-wrap"><text class="info-label">观演感受</text><text class="info-value">{{detail.note.note || '未填写'}}</text></view>
     </block>
   </view>
 

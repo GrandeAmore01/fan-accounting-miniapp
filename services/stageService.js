@@ -70,6 +70,7 @@ async function loadStageData() {
       const data = await apiService.request({ url: '/stages' });
       stageCache = (data.stages || []).map((item) => ({ ...item }));
       albumLibrary = data.albums || buildAlbumLibraryFromStages(stageCache);
+      pruneOrphanLocalData();
       return stageCache;
     } catch (error) {
       console.warn('舞台数据 API 加载失败，回退本地数据', error);
@@ -77,7 +78,25 @@ async function loadStageData() {
   }
   stageCache = localStages.map(normalizeLocalStage);
   albumLibrary = buildAlbumLibraryFromStages(stageCache);
+  pruneOrphanLocalData();
   return stageCache;
+}
+
+function pruneOrphanLocalData() {
+  if (!stageCache.length) {
+    return;
+  }
+  const validStageIds = new Set(stageCache.map((item) => item.stageId));
+  const notes = getStageNotes();
+  const prunedNotes = notes.filter((item) => validStageIds.has(item.stageId));
+  if (prunedNotes.length !== notes.length) {
+    saveStageNotes(prunedNotes);
+  }
+  const userStages = storageService.getCollection(USER_ID, 'userStages');
+  const prunedUserStages = userStages.filter((item) => validStageIds.has(item.stageId));
+  if (prunedUserStages.length !== userStages.length) {
+    storageService.setCollection(USER_ID, 'userStages', prunedUserStages);
+  }
 }
 
 function ensureStagesLoaded() {
@@ -100,6 +119,51 @@ function saveStageNotes(notes) {
   storageService.setCollection(USER_ID, 'stageNotes', notes);
 }
 
+function normalizeActualTicketPrice(value, options = {}) {
+  const required = Boolean(options.required);
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  if (!text) {
+    if (required) {
+      return { valid: false, message: '请输入票价' };
+    }
+    return { valid: true, value: 0 };
+  }
+  if (!/^\d+(\.\d+)?$/.test(text)) {
+    return { valid: false, message: '票价必须为数字' };
+  }
+  const price = Number(text);
+  if (!Number.isFinite(price) || price <= 0) {
+    return { valid: false, message: '票价必须大于 0' };
+  }
+  return { valid: true, value: price };
+}
+
+function promptManualPrice(callbacks = {}) {
+  wx.showModal({
+    title: '输入票价',
+    content: '',
+    editable: true,
+    placeholderText: '请输入大于 0 的数字，例如 680',
+    success: (res) => {
+      if (!res.confirm) {
+        if (callbacks.onCancel) {
+          callbacks.onCancel();
+        }
+        return;
+      }
+      const priceResult = normalizeActualTicketPrice(res.content, { required: true });
+      if (!priceResult.valid) {
+        wx.showToast({ title: priceResult.message, icon: 'none' });
+        promptManualPrice(callbacks);
+        return;
+      }
+      if (callbacks.onSelect) {
+        callbacks.onSelect(priceResult.value);
+      }
+    }
+  });
+}
+
 function getStageNote(stageId) {
   return getStageNotes().find((item) => item.stageId === stageId) || {
     stageId,
@@ -112,6 +176,10 @@ function getStageNote(stageId) {
 }
 
 function saveStageNote(stageId, payload = {}) {
+  const priceResult = normalizeActualTicketPrice(payload.actualTicketPrice);
+  if (!priceResult.valid) {
+    return priceResult;
+  }
   const notes = getStageNotes();
   const exists = notes.find((item) => item.stageId === stageId);
   const nextNote = {
@@ -119,7 +187,7 @@ function saveStageNote(stageId, payload = {}) {
     seat: payload.seat || '',
     companions: payload.companions || '',
     note: payload.note || '',
-    actualTicketPrice: Number(payload.actualTicketPrice || 0),
+    actualTicketPrice: priceResult.value,
     photos: Array.isArray(payload.photos) ? payload.photos.slice(0, MAX_PHOTOS) : []
   };
   if (exists) {
@@ -232,31 +300,7 @@ function promptPriceTier(stage, callbacks = {}, options = {}) {
       showPriceTierActionSheet(tiers, callbacks);
       return;
     }
-    wx.showModal({
-      title: '输入票价',
-      content: '该场次暂无官方票档，请手动输入实际票价',
-      editable: true,
-      placeholderText: '例如 680',
-      success: (res) => {
-        if (!res.confirm) {
-          if (callbacks.onCancel) {
-            callbacks.onCancel();
-          }
-          return;
-        }
-        const price = Number(String(res.content || '').trim());
-        if (price <= 0) {
-          wx.showToast({ title: '请输入大于 0 的金额', icon: 'none' });
-          if (callbacks.onCancel) {
-            callbacks.onCancel();
-          }
-          return;
-        }
-        if (callbacks.onSelect) {
-          callbacks.onSelect(price);
-        }
-      }
-    });
+    promptManualPrice(callbacks);
   };
   const delayMs = Number(options.delayMs || 0);
   if (delayMs > 0) {
@@ -714,11 +758,11 @@ function getAnnualMemoryReport(year, stageType = 'all') {
   };
 }
 
-function getMeetCalendar(year) {
+function getMeetCalendar(year, stageType = 'concert') {
   const targetYear = String(year || new Date().getFullYear());
   const today = new Date();
   const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const lightedStages = getLightedStages()
+  const lightedStages = getLightedStages(stageType === 'all' ? '' : stageType)
     .filter((item) => String(item.year) === targetYear)
     .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
   const monthMap = {};
@@ -789,19 +833,24 @@ function getSongCollectionStats() {
 }
 
 function getPhotoWall() {
-  const notes = getStageNotes();
-  const groups = notes
+  const validStageIds = new Set(stageCache.map((item) => item.stageId));
+  const groups = getStageNotes()
+    .filter((item) => validStageIds.has(item.stageId))
     .filter((item) => (item.photos || []).length > 0)
     .map((note) => {
       const stage = listStages().find((item) => item.stageId === note.stageId);
+      if (!stage) {
+        return null;
+      }
       return {
         stageId: note.stageId,
-        stageName: stage ? stage.stageName : note.stageId,
-        date: stage ? stage.date : '',
-        city: stage ? stage.cityName : '',
+        stageName: stage.stageName,
+        date: stage.date,
+        city: stage.cityName,
         photos: note.photos || []
       };
     })
+    .filter(Boolean)
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return {
     hasPhotos: groups.length > 0,

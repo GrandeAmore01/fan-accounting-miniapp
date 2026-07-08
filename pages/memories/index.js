@@ -51,7 +51,7 @@ Page({
       yearIndex,
       report: stageService.getMeetMemoryReport(type),
       annualReport: stageService.getAnnualMemoryReport(year, type),
-      calendar: stageService.getMeetCalendar(year),
+      calendar: stageService.getMeetCalendar(year, type),
       songCollection: stageService.getSongCollectionStats(),
       photoWall: stageService.getPhotoWall(),
       companions: stageService.getCompanionProfiles(),
