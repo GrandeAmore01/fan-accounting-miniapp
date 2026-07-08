@@ -6,11 +6,18 @@ function listCollections() {
   });
 }
 
-function searchCollections(keyword, category = '') {
+function searchCollections(keyword, filters = {}) {
+  const normalizedFilters = typeof filters === 'string'
+    ? { category: filters }
+    : filters;
+
   return apiService.request({
     url: `/collections/search${apiService.buildQuery({
       keyword,
-      category
+      category: normalizedFilters.category || '',
+      primaryCategory: normalizedFilters.primaryCategory || '',
+      secondaryCategory: normalizedFilters.secondaryCategory || '',
+      productStyle: normalizedFilters.productStyle || ''
     })}`
   });
 }
