@@ -1,4 +1,11 @@
 const feeKeys = ['premium', 'travel', 'hotel', 'rental', 'other', 'shipping'];
+const VALID_CATEGORIES = [
+  'meet',
+  'collection',
+  'transport',
+  'accommodation',
+  'other'
+];
 
 function toNumber(value) {
   return Number(value || 0);
@@ -16,7 +23,19 @@ function normalizeImages(images = []) {
 }
 
 function calculateBaseAmount(expense) {
-  return toNumber(expense.amount) * toNumber(expense.quantity || 1);
+  const amount = toNumber(expense.amount);
+  const quantity = toNumber(expense.quantity || 1);
+
+  switch (expense.pricingMode) {
+    case 'official_unit':
+    case 'unit':
+      return amount * quantity;
+
+    case 'total':
+    case 'direct':
+    default:
+      return amount;
+  }
 }
 
 function calculateTotalAmount(expense) {
@@ -59,7 +78,9 @@ function normalizeExpense(input = {}, expenseId) {
     subType: input.subType || 'concert',
     itemName: String(input.itemName || '').trim(),
     amount: toNumber(input.amount),
-    quantity: toNumber(input.quantity || 1),
+    quantity: input.category === 'collection'
+  ? toNumber(input.quantity || 1)
+  : 1,
     date: input.date || '',
     paymentMethod: input.paymentMethod || '',
     seat: String(input.seat || '').trim(),
@@ -77,7 +98,21 @@ function normalizeExpense(input = {}, expenseId) {
     collectionId: input.collectionId || '',
     stageId: input.stageId || '',
     stageDate: input.stageDate || '',
-    priceTier: input.priceTier || ''
+    priceTier: input.priceTier || '',
+    city: String(input.city || '').trim(),
+    purchaseChannel: input.purchaseChannel || 'none',
+    pricingMode: input.pricingMode || 'direct',
+    referencePrice:
+      input.referencePrice === null ||
+      input.referencePrice === ''
+        ? null
+        : toNumber(input.referencePrice),
+    unitPrice:
+      input.unitPrice === null ||
+      input.unitPrice === ''
+        ? null
+        : toNumber(input.unitPrice),
+    expenseSource: input.expenseSource || 'manual',
   };
 
   return {
@@ -103,6 +138,29 @@ function validateExpense(expense) {
   }
   if (!expense.quantity || expense.quantity <= 0) {
     return { valid: false, message: '请输入大于 0 的数量' };
+  }
+  if (!VALID_CATEGORIES.includes(expense.category)) {
+    return { valid: false, message: '消费分类不正确' };
+  }
+
+  if (expense.totalAmount <= 0) {
+    return { valid: false, message: '金额必须大于0' };
+  }
+
+  if (expense.totalAmount >= 1000000) {
+    return { valid: false, message: '金额必须小于100万元' };
+  }
+
+  if (
+    expense.category === 'collection' &&
+    (!Number.isInteger(expense.quantity) ||
+      expense.quantity < 1 ||
+      expense.quantity > 10)
+  ) {
+    return {
+      valid: false,
+      message: '藏品数量必须是1至10之间的整数'
+    };
   }
   return { valid: true };
 }
@@ -143,6 +201,18 @@ function rowToExpense(row) {
     stageId: row.stage_id || '',
     stageDate: row.stage_date || '',
     priceTier: row.price_tier || '',
+    city: row.city || '',
+    purchaseChannel: row.purchase_channel || 'none',
+    pricingMode: row.pricing_mode || 'direct',
+    referencePrice:
+      row.reference_price === null
+        ? null
+        : Number(row.reference_price),
+    unitPrice:
+      row.unit_price === null
+        ? null
+        : Number(row.unit_price),
+    expenseSource: row.expense_source || 'manual',
     baseAmount: Number(row.base_amount),
     totalAmount: Number(row.total_amount),
     includedAmount: Number(row.included_amount),
@@ -173,6 +243,12 @@ function expenseToParams(expense) {
     stageId: expense.stageId,
     stageDate: expense.stageDate,
     priceTier: expense.priceTier,
+    city: expense.city,
+    purchaseChannel: expense.purchaseChannel,
+    pricingMode: expense.pricingMode,
+    referencePrice: expense.referencePrice,
+    unitPrice: expense.unitPrice,
+    expenseSource: expense.expenseSource,
     baseAmount: expense.baseAmount,
     totalAmount: expense.totalAmount,
     includedAmount: expense.includedAmount
