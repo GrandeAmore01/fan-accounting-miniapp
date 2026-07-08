@@ -1,0 +1,27 @@
+{
+  "name": "fan-accounting-miniapp",
+  "version": "1.0.0",
+  "description": "软件课设计账小程序，用于课程设计开发与小组协作版本管理。",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "jest --runInBand"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GrandeAmore01/fan-accounting-miniapp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/GrandeAmore01/fan-accounting-miniapp/issues"
+  },
+  "homepage": "https://github.com/GrandeAmore01/fan-accounting-miniapp#readme",
+  "devDependencies": {
+    "jest": "^30.4.2"
+  }
+}
