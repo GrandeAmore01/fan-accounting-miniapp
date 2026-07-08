@@ -1,5 +1,6 @@
 module.exports = {
   useBackend: false,
-  apiBaseUrl: 'http://localhost:3000/api',
+  useStageBackend: true,
+  apiBaseUrl: 'http://127.0.0.1:3000/api',
   userId: 'local-user'
 };

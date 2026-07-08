@@ -1,0 +1,97 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="empty">正在加载场次详情...</view>
+  <view wx:elif="{{loadError}}" class="empty">{{loadError}}</view>
+
+  <block wx:elif="{{detail}}">
+  <view class="card">
+    <view class="row">
+      <text class="page-title">{{detail.stageName}}</text>
+      <text class="tag">{{detail.year}}</text>
+    </view>
+    <text class="muted">{{detail.date}} · {{detail.cityName}} · {{detail.venueName}}</text>
+    <text class="status-text {{detail.isLighted ? 'lighted-text' : 'unlighted-text'}}">{{detail.isLighted ? '已点亮' : '未点亮'}}</text>
+  </view>
+
+  <view class="card">
+    <text class="card-title">场次信息</text>
+    <view class="info-line"><text class="info-label">舞台类型</text><text>{{detail.stageTypeName}}</text></view>
+    <view class="info-line"><text class="info-label">线上/线下</text><text>{{detail.isOnline ? '线上' : '线下'}}</text></view>
+    <view class="info-line"><text class="info-label">涉及专辑</text><text>{{detail.albumNamesText}}</text></view>
+    <view class="info-line"><text class="info-label">票档</text><text>{{detail.priceTierText || '暂无'}}</text></view>
+    <view class="info-line"><text class="info-label">参考票价</text><text>{{detail.ticketPrice ? detail.ticketPrice + ' 元' : '暂无'}}</text></view>
+    <view class="info-line"><text class="info-label">座位</text><text>{{detail.displaySeat || '未填写'}}</text></view>
+    <view class="info-line" wx:if="{{detail.description}}"><text class="info-label">场次说明</text><text>{{detail.description}}</text></view>
+  </view>
+
+  <view class="card" wx:if="{{detail.expenseSummary}}">
+    <text class="card-title">本场花费</text>
+    <view class="info-line"><text class="info-label">项目</text><text>{{detail.expenseSummary.itemName}}</text></view>
+    <view class="info-line"><text class="info-label">日期</text><text>{{detail.expenseSummary.date}}</text></view>
+    <view class="info-line"><text class="info-label">金额</text><text>{{detail.expenseSummary.totalAmount}} 元</text></view>
+    <view class="info-line" wx:if="{{detail.expenseSummary.seat}}"><text class="info-label">消费座位</text><text>{{detail.expenseSummary.seat}}</text></view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="card-title">观演备注</text>
+      <text class="link-text" bindtap="handleToggleNoteEdit">{{editingNote ? '取消' : '编辑'}}</text>
+    </view>
+    <block wx:if="{{editingNote}}">
+      <view class="form-field">
+        <text class="field-label">座位</text>
+        <input class="field-input" placeholder="填写座位区域或排号" value="{{noteForm.seat}}" data-field="seat" bindinput="handleNoteInput" />
+      </view>
+      <view class="form-field">
+        <text class="field-label">同行人</text>
+        <input class="field-input" placeholder="多个用逗号分隔" value="{{noteForm.companions}}" data-field="companions" bindinput="handleNoteInput" />
+      </view>
+      <view class="form-field">
+        <text class="field-label">实际票价</text>
+        <input class="field-input" type="digit" placeholder="仅数字，大于 0" value="{{noteForm.actualTicketPrice}}" data-field="actualTicketPrice" bindinput="handleNoteInput" />
+      </view>
+      <view class="form-field">
+        <text class="field-label">观演感受</text>
+        <textarea class="field-textarea" placeholder="记录这场演出的感受" value="{{noteForm.note}}" data-field="note" bindinput="handleNoteInput" />
+      </view>
+      <button class="primary-button" bindtap="handleSaveNote">保存备注</button>
+    </block>
+    <block wx:else>
+      <view class="info-line"><text class="info-label">座位</text><text>{{detail.note.seat || '未填写'}}</text></view>
+      <view class="info-line"><text class="info-label">同行人</text><text>{{detail.note.companions || '未填写'}}</text></view>
+      <view class="info-line"><text class="info-label">实际票价</text><text>{{detail.note.actualTicketPrice ? detail.note.actualTicketPrice + ' 元' : '未填写'}}</text></view>
+      <view class="info-line info-line-wrap"><text class="info-label">观演感受</text><text class="info-value">{{detail.note.note || '未填写'}}</text></view>
+    </block>
+  </view>
+
+  <view class="card">
+    <text class="card-title">演出歌单 · 共 {{detail.songCount}} 首</text>
+    <view class="song-tags">
+      <text class="song-tag" wx:for="{{detail.songList}}" wx:key="*this">{{item}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-head">
+      <text class="card-title">回忆照片</text>
+      <text class="muted">最多 {{detail.note.photos.length || 0}}/9 张</text>
+    </view>
+    <view class="photo-grid">
+      <image
+        wx:for="{{detail.note.photos}}"
+        wx:key="*this"
+        class="photo-item"
+        src="{{item}}"
+        mode="aspectFill"
+        data-url="{{item}}"
+        bindtap="handlePreviewPhoto"
+        bindlongpress="handleRemovePhoto"
+      />
+      <view class="photo-add" bindtap="handleChoosePhotos">+</view>
+    </view>
+    <text class="muted photo-tip">长按照片可删除</text>
+  </view>
+
+  <button wx:if="{{!detail.isLighted}}" class="primary-button" bindtap="handleLightStage">点亮这场</button>
+  <button wx:else class="secondary-button" bindtap="handleUnlightStage">取消点亮</button>
+  </block>
+</view>

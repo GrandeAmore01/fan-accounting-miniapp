@@ -111,6 +111,44 @@ Delete expense:
 DELETE /api/expenses/:expenseId?userId=local-user
 ```
 
+在导入基础 schema 后，再导入舞台公共数据（来源：`data_s/时代少年团小程序公共数据库完整版.xlsx`）：
+
+```bash
+mysql -u root -p fan_accounting < sql/stages_data.sql
+```
+
+如需从 xlsx 重新生成 `stages_data.sql`：
+
+```bash
+python server/scripts/import_stages_from_xlsx.py
+```
+
+## Stage APIs
+
+List stages (from MySQL):
+
+```http
+GET /api/stages
+```
+
+Search stages by song:
+
+```http
+GET /api/stages/search?keyword=要你管
+```
+
+Get stage detail:
+
+```http
+GET /api/stages/stage_001
+```
+
+Get album song library:
+
+```http
+GET /api/stages/albums/progress
+```
+
 ## Mini Program Integration Plan
 
 The current mini program still uses local storage. The next step is to add a small API client in the mini program and gradually replace local expense storage with these REST APIs.

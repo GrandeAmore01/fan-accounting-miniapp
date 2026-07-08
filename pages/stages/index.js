@@ -2,12 +2,15 @@ const stageService = require('../../services/stageService');
 
 Page({
   data: {
+    loading: true,
     stageTypeOptions: [
       { id: 'concert', name: '演唱会' },
       { id: 'festival', name: '音乐节|拼盘' }
     ],
     stageTypeIndex: 0,
-    yearOptions: stageService.getYearOptions(),
+    yearOptions: [{ id: 'all', name: '全部年份' }],
+    statsYearOptions: [],
+    statsYearIndex: 0,
     statusOptions: [
       { id: 'all', name: '全部状态' },
       { id: 'lighted', name: '已点亮' },
@@ -17,6 +20,7 @@ Page({
     statusIndex: 0,
     keyword: '',
     stages: [],
+    songSearchResults: [],
     stats: {
       total: 0,
       lightedCount: 0,
@@ -25,107 +29,133 @@ Page({
     },
     meetTimeline: {
       hasMeetStages: false,
-      lastMeet: {
-        daysText: '--',
-        dateText: '暂无记录',
-        stageName: ''
-      },
-      nextMeet: {
-        daysText: '--',
-        dateText: '暂无记录',
-        stageName: ''
-      },
+      lastMeet: { daysText: '--', dateText: '暂无记录', stageName: '' },
+      nextMeet: { daysText: '--', dateText: '暂无记录', stageName: '' },
       firstMeetDateText: '暂无记录'
     },
     songStats: [],
-    albumProgress: []
+    albumProgress: [],
+    yearStats: {
+      year: '',
+      hasRecords: false,
+      lightedCount: 0,
+      unlockedSongCount: 0,
+      cityCount: 0,
+      songAppearCount: 0,
+      topSongs: [],
+      stages: []
+    }
   },
 
   onShow() {
-    this.refreshPage();
+    this.loadPage();
+  },
+
+  async loadPage() {
+    this.setData({ loading: true });
+    try {
+      await stageService.ensureStagesLoaded();
+      this.refreshPage();
+    } catch (error) {
+      wx.showToast({ title: '舞台数据加载失败', icon: 'none' });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   refreshPage() {
+    const statsYearOptions = stageService.getStatsYearOptions();
+    const yearOptions = stageService.getYearOptions();
+    const statsYearIndex = Math.min(this.data.statsYearIndex, Math.max(statsYearOptions.length - 1, 0));
     const dashboard = stageService.getStageDashboard({
       stageType: this.data.stageTypeOptions[this.data.stageTypeIndex].id,
-      year: this.data.yearOptions[this.data.yearIndex].id,
+      year: yearOptions[this.data.yearIndex] ? yearOptions[this.data.yearIndex].id : 'all',
       lightStatus: this.data.statusOptions[this.data.statusIndex].id,
-      keyword: this.data.keyword
+      keyword: this.data.keyword,
+      statsYear: statsYearOptions[statsYearIndex] ? statsYearOptions[statsYearIndex].id : ''
     });
     this.setData({
+      yearOptions,
+      statsYearOptions,
+      statsYearIndex,
       meetTimeline: dashboard.meetTimeline,
       stages: dashboard.stages,
+      songSearchResults: dashboard.songSearchResults,
       stats: dashboard.stats,
       songStats: dashboard.songStats,
-      albumProgress: dashboard.albumProgress
+      albumProgress: dashboard.albumProgress,
+      yearStats: dashboard.yearStats
     });
   },
 
   handleKeywordInput(event) {
-    this.setData({
-      keyword: event.detail.value
-    });
+    this.setData({ keyword: event.detail.value });
     this.refreshPage();
   },
 
   handleStageTypeChange(event) {
-    const stageTypeIndex = Number(event.currentTarget.dataset.index);
-    this.setData({
-      stageTypeIndex
-    });
+    this.setData({ stageTypeIndex: Number(event.currentTarget.dataset.index) });
     this.refreshPage();
   },
 
   handleYearChange(event) {
-    this.setData({
-      yearIndex: Number(event.detail.value)
-    });
+    this.setData({ yearIndex: Number(event.detail.value) });
+    this.refreshPage();
+  },
+
+  handleStatsYearChange(event) {
+    this.setData({ statsYearIndex: Number(event.detail.value) });
     this.refreshPage();
   },
 
   handleStatusChange(event) {
-    this.setData({
-      statusIndex: Number(event.detail.value)
-    });
+    this.setData({ statusIndex: Number(event.detail.value) });
     this.refreshPage();
   },
 
   handleClearFilter() {
-    this.setData({
-      keyword: '',
-      yearIndex: 0,
-      statusIndex: 0
-    });
+    this.setData({ keyword: '', yearIndex: 0, statusIndex: 0 });
     this.refreshPage();
   },
 
   handleOpenMeetMemory() {
     const type = this.data.stageTypeOptions[this.data.stageTypeIndex].id;
-    wx.navigateTo({
-      url: `/pages/memories/index?type=${type}`
-    });
+    wx.navigateTo({ url: `/pages/memories/index?type=${type}` });
+  },
+
+  handleOpenDetail(event) {
+    const { id } = event.currentTarget.dataset;
+    if (!id) {
+      wx.showToast({ title: '场次信息缺失', icon: 'none' });
+      return;
+    }
+    wx.navigateTo({ url: `/pages/stage-detail/index?id=${id}` });
+  },
+
+  stopTap() {},
+
+  handleSongStageAction(event) {
+    const { stageId, lighted } = event.currentTarget.dataset;
+    if (lighted === 'true' || lighted === true) {
+      this.handleOpenDetail({ currentTarget: { dataset: { id: stageId } } });
+      return;
+    }
+    this.handleLightStage({ currentTarget: { dataset: { id: stageId } } });
   },
 
   handleLightStage(event) {
     const { id } = event.currentTarget.dataset;
     const result = stageService.lightStage(id);
     if (!result.valid) {
-      wx.showToast({
-        title: result.message,
-        icon: 'none'
-      });
+      wx.showToast({ title: result.message, icon: 'none' });
       return;
     }
     const stage = result.data || this.data.stages.find((item) => item.stageId === id);
-    if (stage && stage.expenseId) {
-      wx.showToast({
-        title: '已点亮',
-        icon: 'success'
-      });
+    if (stageService.hasStageLinkedExpense(id)) {
+      wx.showToast({ title: '已点亮', icon: 'success' });
       this.refreshPage();
       return;
     }
-
     wx.showModal({
       title: '同步消费记录',
       content: '已点亮该场次，是否按票档同步生成一条消费记录？',
@@ -134,45 +164,32 @@ Page({
       confirmColor: '#c84d69',
       success: (res) => {
         if (!res.confirm) {
-          wx.showToast({
-            title: '已点亮',
-            icon: 'success'
-          });
+          wx.showToast({ title: '已点亮', icon: 'success' });
           this.refreshPage();
           return;
         }
-        this.handleCreateExpenseFromStage(stage);
+        setTimeout(() => {
+          this.handleCreateExpenseFromStage(stage);
+        }, 350);
       }
     });
   },
 
   handleCreateExpenseFromStage(stage) {
     if (!stage) {
-      wx.showToast({
-        title: '舞台场次不存在',
-        icon: 'none'
-      });
+      wx.showToast({ title: '舞台场次不存在', icon: 'none' });
       this.refreshPage();
       return;
     }
-    const priceTiers = stage && stage.priceTiers ? stage.priceTiers : [];
-    if (priceTiers.length > 1) {
-      wx.showActionSheet({
-        itemList: priceTiers.map((price) => `${price} 元`),
-        success: (res) => {
-          this.createExpenseFromStage(stage.stageId, priceTiers[res.tapIndex]);
-        },
-        fail: () => {
-          wx.showToast({
-            title: '已点亮',
-            icon: 'success'
-          });
-          this.refreshPage();
-        }
-      });
-      return;
-    }
-    this.createExpenseFromStage(stage.stageId, priceTiers[0]);
+    stageService.promptPriceTier(stage, {
+      onSelect: (priceTier) => {
+        this.createExpenseFromStage(stage.stageId, priceTier);
+      },
+      onCancel: () => {
+        wx.showToast({ title: '已点亮', icon: 'success' });
+        this.refreshPage();
+      }
+    });
   },
 
   createExpenseFromStage(stageId, priceTier) {
@@ -186,27 +203,8 @@ Page({
 
   handleUnlightStage(event) {
     const { id } = event.currentTarget.dataset;
-    const stage = this.data.stages.find((item) => item.stageId === id);
-    const hasLinkedExpense = Boolean(stage && stage.expenseId);
-    wx.showModal({
-      title: '取消点亮',
-      content: hasLinkedExpense
-        ? '取消点亮后，是否同时删除这条舞台同步生成的消费记录？'
-        : '取消后会同步更新歌曲统计和专辑进度，确定要取消吗？',
-      cancelText: hasLinkedExpense ? '保留记录' : '再想想',
-      confirmText: hasLinkedExpense ? '删除记录' : '取消点亮',
-      confirmColor: '#c84d69',
-      success: (res) => {
-        if (!res.confirm && !hasLinkedExpense) {
-          return;
-        }
-        stageService.unlightStage(id, {
-          deleteExpense: hasLinkedExpense && res.confirm
-        });
-        wx.showToast({
-          title: hasLinkedExpense && res.confirm ? '已删除记录' : '已取消',
-          icon: 'success'
-        });
+    stageService.confirmUnlightStage(id, {
+      onDone: () => {
         this.refreshPage();
       }
     });

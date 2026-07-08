@@ -3,6 +3,7 @@ require('dotenv').config();
 const cors = require('cors');
 const express = require('express');
 const expenseRoutes = require('./routes/expenses');
+const stageRoutes = require('./routes/stages');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -18,6 +19,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/stages', stageRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

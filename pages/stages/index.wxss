@@ -209,3 +209,86 @@
   height: 16rpx;
   margin-top: 12rpx;
 }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.compact-picker {
+  min-width: 180rpx;
+  min-height: 60rpx;
+  line-height: 60rpx;
+  font-size: 24rpx;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.stats-item {
+  padding: 18rpx;
+  border-radius: 12rpx;
+  background: #fff7da;
+}
+
+.section-gap {
+  display: block;
+  margin-top: 20rpx;
+}
+
+.year-stage-item {
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #f4e6a8;
+}
+
+.year-stage-item:last-child {
+  border-bottom: 0;
+}
+
+.song-search-group {
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid #f4e6a8;
+}
+
+.song-search-group:last-child {
+  border-bottom: 0;
+}
+
+.song-stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 12rpx;
+}
+
+.mini-button {
+  width: 140rpx !important;
+  min-width: 140rpx;
+  height: 60rpx !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 24rpx !important;
+}
+
+.card-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.card-actions button {
+  flex: 1;
+  margin-top: 0 !important;
+}
+
+.stage-card {
+  cursor: pointer;
+}

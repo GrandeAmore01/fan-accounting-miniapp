@@ -1,4 +1,8 @@
 const storageService = require('../../services/storageService');
+const stageService = require('../../services/stageService');
+const config = require('../../services/config');
+
+const USER_ID = config.userId || 'local-user';
 
 Page({
   data: {
@@ -27,11 +31,25 @@ Page({
     this.refreshPage();
   },
 
-  refreshPage() {
-    const summary = storageService.getLocalDataSummary('local-user');
+  async refreshPage() {
+    const summary = storageService.getLocalDataSummary(USER_ID);
+    let stageStats = {
+      lightedCount: summary.counts.lightedStages,
+      total: summary.counts.userStages
+    };
+    try {
+      await stageService.ensureStagesLoaded();
+      stageStats = stageService.getStageStats();
+    } catch (error) {
+      console.warn('舞台统计加载失败，使用本地缓存计数', error);
+    }
     this.setData({
       profile: summary.profile,
-      counts: summary.counts,
+      counts: {
+        ...summary.counts,
+        lightedStages: stageStats.lightedCount,
+        userStages: stageStats.total
+      },
       hasLocalData: summary.hasLocalData,
       cloudStatus: storageService.getCloudStatus()
     });
@@ -72,7 +90,7 @@ Page({
         if (!res.confirm) {
           return;
         }
-        storageService.resetUserData('local-user');
+        storageService.resetUserData(USER_ID);
         wx.showToast({
           title: '已清空',
           icon: 'success'
