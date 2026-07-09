@@ -1,7 +1,17 @@
 const apiService = require('./apiService');
+const config = require('./config');
+
+const COLLECTION_API_BASE_URL = config.collectionApiBaseUrl || config.apiBaseUrl;
+
+function requestCollectionApi(options) {
+  return apiService.request({
+    ...options,
+    baseUrl: COLLECTION_API_BASE_URL
+  });
+}
 
 function listCollections() {
-  return apiService.request({
+  return requestCollectionApi({
     url: '/collections'
   });
 }
@@ -11,7 +21,7 @@ function searchCollections(keyword, filters = {}) {
     ? { category: filters }
     : filters;
 
-  return apiService.request({
+  return requestCollectionApi({
     url: `/collections/search${apiService.buildQuery({
       keyword,
       category: normalizedFilters.category || '',
@@ -23,7 +33,7 @@ function searchCollections(keyword, filters = {}) {
 }
 
 function getCollection(collectionId) {
-  return apiService.request({
+  return requestCollectionApi({
     url: `/collections/${collectionId}`
   });
 }
