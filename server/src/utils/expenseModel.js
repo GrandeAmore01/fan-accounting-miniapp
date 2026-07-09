@@ -19,7 +19,7 @@ function normalizeFees(fees = {}) {
 }
 
 function normalizeImages(images = []) {
-  return Array.isArray(images) ? images.slice(0, 9).map((item) => String(item)) : [];
+  return [];
 }
 
 function calculateBaseAmount(expense) {
@@ -103,12 +103,12 @@ function normalizeExpense(input = {}, expenseId) {
     purchaseChannel: input.purchaseChannel || 'none',
     pricingMode: input.pricingMode || 'direct',
     referencePrice:
-      input.referencePrice === null ||
+      input.referencePrice == null ||
       input.referencePrice === ''
         ? null
         : toNumber(input.referencePrice),
     unitPrice:
-      input.unitPrice === null ||
+      input.unitPrice == null ||
       input.unitPrice === ''
         ? null
         : toNumber(input.unitPrice),
@@ -124,17 +124,18 @@ function normalizeExpense(input = {}, expenseId) {
 }
 
 function validateExpense(expense) {
+  const amountText = String(expense.amount || '').trim();
   if (!expense.itemName) {
     return { valid: false, message: '请填写消费项目名称' };
   }
   if (!expense.date) {
     return { valid: false, message: '请选择消费日期' };
   }
-  if (expense.images.length > 9) {
-    return { valid: false, message: '图片最多上传 9 张' };
-  }
   if (!expense.amount || expense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };
+  }
+  if (!/^\d+(\.\d{1,2})?$/.test(amountText)) {
+    return { valid: false, message: '金额最多保留两位小数' };
   }
   if (!expense.quantity || expense.quantity <= 0) {
     return { valid: false, message: '请输入大于 0 的数量' };
@@ -147,8 +148,8 @@ function validateExpense(expense) {
     return { valid: false, message: '金额必须大于0' };
   }
 
-  if (expense.totalAmount >= 1000000) {
-    return { valid: false, message: '金额必须小于100万元' };
+  if (expense.amount > 1000000) {
+    return { valid: false, message: '金额不能超过100万元' };
   }
 
   if (
@@ -179,6 +180,19 @@ function parseJson(value, fallback) {
   }
 }
 
+function formatDate(value) {
+  if (!value) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.slice(0, 10);
+  }
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function rowToExpense(row) {
   return {
     expenseId: row.expense_id,
@@ -188,7 +202,7 @@ function rowToExpense(row) {
     itemName: row.item_name,
     amount: Number(row.amount),
     quantity: Number(row.quantity),
-    date: row.expense_date,
+    date: formatDate(row.expense_date),
     paymentMethod: row.payment_method || '',
     seat: row.seat || '',
     location: row.location || '',
