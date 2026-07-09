@@ -1,4 +1,4 @@
-"""从公共数据库 Excel 生成藏品 MySQL 数据脚本。"""
+"""从最终 Excel 的藏品图鉴表生成 MySQL 数据脚本。"""
 
 import os
 import re
@@ -9,11 +9,12 @@ import openpyxl
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-XLSX_PATH = os.path.join(
-    ROOT,
-    'data_s',
-    '时代少年团小程序公共数据库完整版.xlsx'
+XLSX_PATH = os.environ.get(
+    'COLLECTIONS_XLSX_PATH',
+    r'F:\软工课设\藏品图鉴表_分类及数据清洗最终版.xlsx'
 )
+SHEET_NAME = 'collection_藏品图鉴表'
+EXPECTED_COUNT = 206
 OUTPUT_PATH = os.path.join(
     ROOT,
     'server',
@@ -21,20 +22,11 @@ OUTPUT_PATH = os.path.join(
     'collections_data.sql'
 )
 
-CATEGORY_MAP = {
-    '周边': 'goods',
-    '杂志': 'magazine',
-    '应援服': 'support_wear',
-    '伴手礼': 'gift'
-}
-
-
 def find_collection_sheet(workbook):
     """寻找藏品图鉴工作表。"""
-    for sheet_name in workbook.sheetnames:
-        if 'collection_' in sheet_name:
-            return workbook[sheet_name]
-    raise ValueError('未找到 collection_藏品图鉴表')
+    if SHEET_NAME not in workbook.sheetnames:
+        raise ValueError(f'未找到工作表：{SHEET_NAME}')
+    return workbook[SHEET_NAME]
 
 
 def text_value(value):
@@ -158,7 +150,10 @@ def build_record(headers, row):
         'collection_id': collection_id,
         'collection_name': collection_name,
         'sale_type': text_value(source.get('贩卖类别')),
-        'category': CATEGORY_MAP.get(source_category, 'other'),
+        'collection_category': source_category,
+        'primary_category': text_value(source.get('一级分类')),
+        'secondary_category': text_value(source.get('二级分类')),
+        'product_style': text_value(source.get('商品款式')),
         'sale_date': parse_date(
             source.get('开售时间/购买时间/领取时间')
         ),
@@ -182,7 +177,10 @@ def create_table_sql():
   collection_id VARCHAR(64) PRIMARY KEY,
   collection_name VARCHAR(255) NOT NULL,
   sale_type VARCHAR(64) NOT NULL DEFAULT '',
-  category VARCHAR(32) NOT NULL DEFAULT 'goods',
+  collection_category VARCHAR(64) NOT NULL DEFAULT '',
+  primary_category VARCHAR(64) NOT NULL DEFAULT '',
+  secondary_category VARCHAR(64) NOT NULL DEFAULT '',
+  product_style VARCHAR(64) NOT NULL DEFAULT '',
   sale_date DATE NULL,
   sale_date_text VARCHAR(64) NOT NULL DEFAULT '',
   stage_id VARCHAR(64) NULL,
@@ -197,7 +195,10 @@ def create_table_sql():
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_collections_name (collection_name),
-  INDEX idx_collections_category (category),
+  INDEX idx_collections_category (
+    collection_category, primary_category, secondary_category
+  ),
+  INDEX idx_collections_style (product_style),
   INDEX idx_collections_stage (stage_id)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
@@ -209,7 +210,10 @@ def record_to_sql(record):
         sql_text(record['collection_id']),
         sql_text(record['collection_name']),
         sql_text(record['sale_type']),
-        sql_text(record['category']),
+        sql_text(record['collection_category']),
+        sql_text(record['primary_category']),
+        sql_text(record['secondary_category']),
+        sql_text(record['product_style']),
         sql_text(record['sale_date']),
         sql_text(record['sale_date_text']),
         sql_text(record['stage_id']),
@@ -243,6 +247,15 @@ def main():
         raise ValueError('藏品工作表为空')
 
     headers = [text_value(value) for value in rows[0]]
+    required_headers = {
+        'collection_id', '藏品全称', '贩卖类别', '藏品分类',
+        '开售时间/购买时间/领取时间', '对应舞台', '售价',
+        '商品图url', '代言品牌', '所属系列',
+        '一级分类', '二级分类', '商品款式'
+    }
+    missing_headers = sorted(required_headers - set(headers))
+    if missing_headers:
+        raise ValueError(f'藏品图鉴表缺少列：{", ".join(missing_headers)}')
     records = []
 
     for row_number, row in enumerate(rows[1:], start=2):
@@ -256,6 +269,13 @@ def main():
 
         if not record['collection_name']:
             raise ValueError(f'第 {row_number} 行缺少藏品名称')
+
+        for field in (
+            'sale_type', 'collection_category',
+            'primary_category', 'product_style'
+        ):
+            if not record[field]:
+                raise ValueError(f'第 {row_number} 行缺少 {field}')
 
         records.append(record)
 
@@ -271,28 +291,44 @@ def main():
             f'发现重复 collection_id：{", ".join(duplicate_ids)}'
         )
 
-    unknown_categories = sorted({
-        item['source_category']
-        for item in records
-        if item['source_category'] not in CATEGORY_MAP
-    })
+    if len(records) != EXPECTED_COUNT:
+        raise ValueError(
+            f'藏品数量应为 {EXPECTED_COUNT}，实际为 {len(records)}'
+        )
 
     sql_lines = [
         'USE fan_accounting;',
         '',
         create_table_sql(),
         '',
-        'DELETE FROM collections;',
-        '',
         (
             'INSERT INTO collections ('
-            'collection_id, collection_name, sale_type, category, '
+            'collection_id, collection_name, sale_type, '
+            'collection_category, primary_category, secondary_category, '
+            'product_style, '
             'sale_date, sale_date_text, stage_id, reference_price, '
             'price_text, acquisition_type, price_note, brand, '
             'series_name, image_url'
             ') VALUES'
         ),
-        ',\n'.join(record_to_sql(record) for record in records) + ';',
+        ',\n'.join(record_to_sql(record) for record in records),
+        '''ON DUPLICATE KEY UPDATE
+  collection_name = VALUES(collection_name),
+  sale_type = VALUES(sale_type),
+  collection_category = VALUES(collection_category),
+  primary_category = VALUES(primary_category),
+  secondary_category = VALUES(secondary_category),
+  product_style = VALUES(product_style),
+  sale_date = VALUES(sale_date),
+  sale_date_text = VALUES(sale_date_text),
+  stage_id = VALUES(stage_id),
+  reference_price = VALUES(reference_price),
+  price_text = VALUES(price_text),
+  acquisition_type = VALUES(acquisition_type),
+  price_note = VALUES(price_note),
+  brand = VALUES(brand),
+  series_name = VALUES(series_name),
+  image_url = VALUES(image_url);''',
         ''
     ]
 
@@ -319,7 +355,8 @@ def main():
     print(f'numeric_prices: {numeric_price_count}')
     print(f'ticket_gifts: {ticket_gift_count}')
     print(f'special_prices: {special_price_count}')
-    print(f'unknown_categories: {unknown_categories}')
+    print('missing_collection_ids: 0')
+    print('duplicate_collection_ids: 0')
     print(f'output: {OUTPUT_PATH}')
 
 

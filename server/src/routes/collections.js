@@ -24,7 +24,11 @@ function rowToCollection(row) {
     collectionId: row.collection_id,
     collectionName: row.collection_name,
     saleType: row.sale_type,
-    category: row.category,
+    category: row.collection_category,
+    collectionCategory: row.collection_category,
+    primaryCategory: row.primary_category,
+    secondaryCategory: row.secondary_category,
+    productStyle: row.product_style,
     saleDate: formatDate(row.sale_date),
     saleDateText: row.sale_date_text,
     stageId: row.stage_id || '',
@@ -62,6 +66,9 @@ router.get('/search', async (req, res, next) => {
   try {
     const keyword = String(req.query.keyword || '').trim();
     const category = String(req.query.category || '').trim();
+    const primaryCategory = String(req.query.primaryCategory || '').trim();
+    const secondaryCategory = String(req.query.secondaryCategory || '').trim();
+    const productStyle = String(req.query.productStyle || '').trim();
 
     const conditions = [];
     const params = [];
@@ -70,17 +77,43 @@ router.get('/search', async (req, res, next) => {
       conditions.push(
         `(collection_name LIKE ?
           OR sale_type LIKE ?
+          OR primary_category LIKE ?
+          OR secondary_category LIKE ?
+          OR product_style LIKE ?
           OR brand LIKE ?
           OR series_name LIKE ?)`
       );
 
       const pattern = `%${keyword}%`;
-      params.push(pattern, pattern, pattern, pattern);
+      params.push(
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        pattern
+      );
     }
 
     if (category) {
-      conditions.push('category = ?');
+      conditions.push('collection_category = ?');
       params.push(category);
+    }
+
+    if (primaryCategory) {
+      conditions.push('primary_category = ?');
+      params.push(primaryCategory);
+    }
+
+    if (secondaryCategory) {
+      conditions.push('secondary_category = ?');
+      params.push(secondaryCategory);
+    }
+
+    if (productStyle) {
+      conditions.push('product_style = ?');
+      params.push(productStyle);
     }
 
     const whereClause = conditions.length

@@ -28,7 +28,10 @@ router.get('/', async (req, res, next) => {
       `SELECT
          c.collection_id,
          c.collection_name,
-         c.category,
+         c.collection_category,
+         c.primary_category,
+         c.secondary_category,
+         c.product_style,
          c.reference_price,
          c.price_text,
          c.acquisition_type,
@@ -47,7 +50,11 @@ router.get('/', async (req, res, next) => {
       data: rows.map((row) => ({
         collectionId: row.collection_id,
         collectionName: row.collection_name,
-        category: row.category,
+        category: row.collection_category,
+        collectionCategory: row.collection_category,
+        primaryCategory: row.primary_category,
+        secondaryCategory: row.secondary_category,
+        productStyle: row.product_style,
         referencePrice:
           row.reference_price === null
             ? null

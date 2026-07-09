@@ -54,6 +54,36 @@ CREATE TABLE IF NOT EXISTS expenses (
     FOREIGN KEY (user_id) REFERENCES users(user_id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS collections (
+  collection_id VARCHAR(64) PRIMARY KEY,
+  collection_name VARCHAR(255) NOT NULL,
+  sale_type VARCHAR(64) NOT NULL DEFAULT '',
+  collection_category VARCHAR(64) NOT NULL DEFAULT '',
+  primary_category VARCHAR(64) NOT NULL DEFAULT '',
+  secondary_category VARCHAR(64) NOT NULL DEFAULT '',
+  product_style VARCHAR(64) NOT NULL DEFAULT '',
+  sale_date DATE NULL,
+  sale_date_text VARCHAR(64) NOT NULL DEFAULT '',
+  stage_id VARCHAR(64) NULL,
+  reference_price DECIMAL(10,2) NULL,
+  price_text VARCHAR(64) NOT NULL DEFAULT '',
+  acquisition_type VARCHAR(32) NOT NULL DEFAULT 'purchase',
+  price_note VARCHAR(255) NOT NULL DEFAULT '',
+  brand VARCHAR(255) NOT NULL DEFAULT '',
+  series_name VARCHAR(255) NOT NULL DEFAULT '',
+  image_url VARCHAR(500) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_collections_name (collection_name),
+  INDEX idx_collections_category (
+    collection_category, primary_category, secondary_category
+  ),
+  INDEX idx_collections_style (product_style),
+  INDEX idx_collections_stage (stage_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `user_collections` (
   `user_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
   `collection_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
