@@ -1,9 +1,11 @@
 const config = require('./config');
 
 function request(options) {
+  const baseUrl = options.baseUrl || config.apiBaseUrl;
+
   return new Promise((resolve, reject) => {
     wx.request({
-      url: `${config.apiBaseUrl}${options.url}`,
+      url: `${baseUrl}${options.url}`,
       method: options.method || 'GET',
       data: options.data || {},
       header: {
