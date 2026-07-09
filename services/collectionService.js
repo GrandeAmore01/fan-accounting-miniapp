@@ -3,6 +3,7 @@ const collectionCatalogService = require('./collectionCatalogService');
 const config = require('./config');
 
 const USER_ID = config.userId || 'local-user';
+const COLLECTION_API_BASE_URL = config.collectionApiBaseUrl || config.apiBaseUrl;
 
 function normalizeCollection(item = {}) {
   return {
@@ -30,6 +31,7 @@ async function listCollections() {
   const [catalog, userStates] = await Promise.all([
     collectionCatalogService.listCollections(),
     apiService.request({
+      baseUrl: COLLECTION_API_BASE_URL,
       url: `/user-collections${apiService.buildQuery({ userId: USER_ID })}`
     })
   ]);
@@ -47,6 +49,7 @@ async function listCollections() {
 
 function setOwned(collectionId, isOwned) {
   return apiService.request({
+    baseUrl: COLLECTION_API_BASE_URL,
     url: `/user-collections/${isOwned ? 'light' : 'unlight'}`,
     method: 'POST',
     data: { userId: USER_ID, collectionId }
