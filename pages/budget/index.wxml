@@ -14,52 +14,173 @@
     <input wx:else class="picker-field" type="number" maxlength="4" value="{{selectedPeriod}}" placeholder="输入年份" bindinput="handleYearInput" />
   </view>
 
+  <button class="refresh-button" bindtap="handleRefreshBudget">刷新预算统计</button>
+
   <view class="card">
     <view class="row">
       <view>
         <text class="muted">预算金额</text>
-        <text class="metric">￥{{progress.budget.amount}}</text>
+        <text class="metric {{progressView.hasBudget ? '' : 'unset-metric'}}">{{progressView.amountText}}</text>
       </view>
       <button class="primary-button compact-button" bindtap="handleOpenBudgetForm">设置预算</button>
     </view>
 
-    <view class="progress-track">
-      <view class="progress-fill {{progress.isOverBudget ? 'danger-fill' : progress.isOverThreshold ? 'warn-fill' : ''}}" style="width: {{progress.percent > 100 ? 100 : progress.percent}}%;"></view>
+    <view class="budget-visual">
+      <view class="progress-ring {{progressView.statusLevel}}-ring">
+        <text class="ring-percent">{{progressView.percentText}}</text>
+        <text class="ring-label">使用率</text>
+      </view>
+      <view class="budget-info">
+        <text class="budget-info-title">{{selectedType === 'month' ? '本月预算' : '年度预算'}}</text>
+        <text class="budget-info-desc">{{progressView.statusText}}</text>
+      </view>
+    </view>
+
+    <view class="progress-track {{progressView.hasBudget ? '' : 'unset-track'}}">
+      <view class="progress-fill {{progressView.fillClass}}" style="width: {{progressView.safePercent}}%;"></view>
     </view>
 
     <view class="row summary-row">
-      <text class="muted">已用：￥{{progress.totalAmount}}</text>
-      <text class="muted">剩余：￥{{progress.remainingAmount}}</text>
+      <text class="muted">已用：{{progressView.totalAmountText}}</text>
+      <text class="muted">剩余：{{progressView.remainingAmountText}}</text>
     </view>
-    <text class="muted">当前使用进度：{{progress.percent}}%，提醒阈值：{{progress.thresholdPercent}}%</text>
-    <text class="status-text danger-text" wx:if="{{progress.isOverBudget}}">已超过预算，请注意后续支出。</text>
-    <text class="status-text warn-text" wx:elif="{{progress.isOverThreshold}}">已达到提醒阈值，建议关注预算使用情况。</text>
-    <text class="status-text ok-text" wx:else>当前预算状态正常。</text>
+    <text class="muted">当前使用进度：{{progressView.percentText}}，提醒阈值：{{progressView.thresholdText}}</text>
+    <text class="status-text {{progressView.statusLevel}}-text">{{progressView.statusText}}</text>
+  </view>
+
+  <view class="card analysis-card">
+    <text class="card-title">本期消费分析</text>
+    <text class="analysis-title">{{analysis.title}}</text>
+    <text class="analysis-desc">{{analysis.desc}}</text>
+  </view>
+
+  <view class="card health-card {{insight.scoreClass}}">
+    <view class="row">
+      <view>
+        <text class="card-title">预算健康分析</text>
+        <text class="health-level">{{insight.level}}</text>
+      </view>
+      <view class="health-score {{insight.scoreClass}}">
+        <text>{{insight.scoreText}}</text>
+      </view>
+    </view>
+    <text class="analysis-desc">{{insight.mainReason}}</text>
+    <text class="analysis-desc">{{insight.overspendReason}}</text>
+    <text class="suggestion-text">{{insight.suggestion}}</text>
+
+    <view class="risk-section" wx:if="{{insight.riskCategories.length > 0}}">
+      <text class="section-title">分类风险排行</text>
+      <view class="risk-item" wx:for="{{insight.riskCategories}}" wx:key="category">
+        <view class="row">
+          <text class="stat-name">{{item.categoryName}}</text>
+          <text class="category-budget-percent">{{item.percent}}%</text>
+        </view>
+        <text class="risk-meta">已用 {{item.usedAmountText}} / 预算 {{item.budgetAmountText}}</text>
+        <view class="mini-track">
+          <view class="mini-fill {{item.fillClass}}" style="width: {{item.safePercent}}%;"></view>
+        </view>
+      </view>
+    </view>
+
+    <view class="risk-section" wx:if="{{insight.unsetCategoryHints.length > 0}}">
+      <text class="section-title">未设置分类预算提醒</text>
+      <view class="unset-hint" wx:for="{{insight.unsetCategoryHints}}" wx:key="category">
+        {{item.categoryName}}已有消费 {{item.usedAmountText}}，建议补充分类预算。
+      </view>
+    </view>
+  </view>
+
+  <view class="card warning-card">
+    <text class="card-title">预算预警记录</text>
+    <view wx:if="{{warnings.length === 0}}" class="empty">当前周期暂无预算预警。</view>
+    <view class="warning-item {{item.className}}" wx:for="{{warnings}}" wx:key="id">
+      <text class="warning-title">{{item.title}}</text>
+      <text class="warning-desc">{{item.desc}}</text>
+    </view>
   </view>
 
   <view class="card">
-    <text class="card-title">分类统计</text>
-    <view wx:if="{{categoryStats.length === 0}}" class="empty">当前周期暂无可统计消费。</view>
-    <view class="stat-item" wx:for="{{categoryStats}}" wx:key="category">
+    <view class="row">
+      <text class="card-title">分类预算</text>
+      <text class="muted">按大类分别控制支出</text>
+    </view>
+    <view class="category-budget-item {{item.statusLevel}}-budget" wx:for="{{categoryBudgetStats}}" wx:key="category">
       <view class="row">
         <text class="stat-name">{{item.categoryName}}</text>
-        <text class="muted">￥{{item.amount}} · {{item.percent}}%</text>
+        <text class="category-budget-percent">{{item.percentText}}</text>
       </view>
-      <view class="mini-track">
-        <view class="mini-fill" style="width: {{item.percent}}%;"></view>
+      <view class="category-budget-summary">
+        <text>预算：{{item.budgetAmountText}}</text>
+        <text>已用：{{item.usedAmountText}}</text>
+        <text>剩余：{{item.remainingAmountText}}</text>
+      </view>
+      <view class="mini-track {{item.isUnset ? 'unset-track' : ''}}">
+        <view class="mini-fill {{item.fillClass}}" style="width: {{item.safePercent}}%;"></view>
       </view>
     </view>
   </view>
 
   <view class="card">
-    <text class="card-title">月度趋势</text>
+    <text class="card-title">分类占比图</text>
+    <view wx:if="{{categoryStats.length === 0}}" class="empty">当前周期暂无可统计消费。</view>
+    <view class="share-chart" wx:if="{{categoryStats.length > 0}}">
+      <view
+        class="share-segment share-{{item.colorClass}}"
+        wx:for="{{categoryStats}}"
+        wx:key="category"
+        style="width: {{item.shareWidth}}%;"
+      ></view>
+    </view>
+    <view class="stat-item {{item.isTop ? 'top-stat-item' : ''}}" wx:for="{{categoryStats}}" wx:key="category">
+      <view class="row">
+        <view class="legend-name">
+          <text class="legend-dot share-{{item.colorClass}}"></text>
+          <text class="stat-name">{{item.categoryName}}</text>
+        </view>
+        <text class="muted">{{item.amountText}} · {{item.count}} 笔 · {{item.percent}}%</text>
+      </view>
+      <view class="mini-track">
+        <view class="mini-fill share-{{item.colorClass}}" style="width: {{item.percent}}%;"></view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">月度趋势图</text>
     <view wx:if="{{monthTrend.length === 0}}" class="empty">暂无月度消费数据。</view>
+    <view class="trend-chart" wx:if="{{monthTrend.length > 0}}">
+      <view class="trend-column" wx:for="{{monthTrend}}" wx:key="month">
+        <view class="trend-column-bar">
+          <view class="trend-column-fill" style="height: {{item.barPercent}}%;"></view>
+        </view>
+        <text class="trend-column-label">{{item.shortMonth}}</text>
+      </view>
+    </view>
     <view class="trend-item" wx:for="{{monthTrend}}" wx:key="month">
       <text class="trend-label">{{item.month}}</text>
       <view class="trend-track">
         <view class="trend-fill" style="width: {{item.percent}}%;"></view>
       </view>
-      <text class="trend-amount">￥{{item.amount}}</text>
+      <text class="trend-amount">{{item.amountText}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <text class="card-title">预算历史列表</text>
+    <view wx:if="{{budgetHistory.length === 0}}" class="empty">暂无预算历史。</view>
+    <view class="history-item" wx:for="{{budgetHistory}}" wx:key="period">
+      <view class="row">
+        <text class="stat-name">{{item.period}}</text>
+        <text class="history-percent">{{item.percentText}}</text>
+      </view>
+      <view class="history-grid">
+        <text>预算：{{item.budgetAmountText}}</text>
+        <text>实际：{{item.actualAmountText}}</text>
+        <text>剩余：{{item.remainingAmountText}}</text>
+      </view>
+      <view class="mini-track {{item.hasBudget ? '' : 'unset-track'}}">
+        <view class="mini-fill {{item.fillClass}}" style="width: {{item.safePercent}}%;"></view>
+      </view>
     </view>
   </view>
 
@@ -83,6 +204,21 @@
         <input class="form-input" type="digit" value="{{formData.amount}}" data-field="amount" placeholder="例如：1000" bindinput="handleFormInput" />
       </view>
 
+      <view class="form-section">
+        <text class="section-title">分类预算（可选）</text>
+        <view class="category-budget-form-item" wx:for="{{categoryBudgetFormItems}}" wx:key="category">
+          <text class="field-label">{{item.categoryName}}</text>
+          <input
+            class="form-input"
+            type="digit"
+            value="{{item.inputValue}}"
+            data-index="{{index}}"
+            placeholder="不填则不单独限制"
+            bindinput="handleCategoryBudgetInput"
+          />
+        </view>
+      </view>
+
       <view class="form-field">
         <text class="field-label">提醒阈值（%）</text>
         <input class="form-input" type="number" value="{{formData.thresholdPercent}}" data-field="thresholdPercent" placeholder="例如：80" bindinput="handleFormInput" />
@@ -90,7 +226,7 @@
 
       <view class="modal-actions">
         <button class="secondary-button" bindtap="handleCloseBudgetForm">取消</button>
-        <button class="primary-button" bindtap="handleSaveBudget">保存</button>
+        <button class="primary-button" loading="{{savingBudget}}" disabled="{{savingBudget}}" bindtap="handleSaveBudget">保存</button>
       </view>
     </view>
   </view>

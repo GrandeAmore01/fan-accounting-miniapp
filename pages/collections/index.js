@@ -1,131 +1,205 @@
 const collectionService = require('../../services/collectionService');
 
+const ALL = '全部';
+const STYLE_ORDER = ['单人款', '团体款', '套装款', '普通款', '高会款', '组合款', '单品款'];
+
 Page({
   data: {
-    collections: [],
-    categories: [{ id: 'all', name: '全部分类' }, ...collectionService.collectionCategories],
-    statusOptions: [
-      { id: 'all', name: '全部状态' },
-      { id: 'owned', name: '已点亮' },
-      { id: 'missing', name: '未点亮' }
-    ],
-    categoryIndex: 0,
+    loading: true,
+    loadError: '',
+    allCollections: [],
+    groups: [],
+    primaryOptions: [ALL],
+    secondaryOptions: [ALL],
+    styleOptions: [ALL, ...STYLE_ORDER],
+    statusOptions: ['全部', '已点亮', '未点亮'],
+    primaryIndex: 0,
+    secondaryIndex: 0,
+    styleIndex: 0,
     statusIndex: 0,
     keyword: '',
-    progress: {
-      total: 0,
-      ownedCount: 0,
-      percent: 0
-    }
+    appliedFilters: {
+      primary: ALL,
+      secondary: ALL,
+      style: ALL,
+      status: '全部',
+      keyword: ''
+    },
+    progress: { total: 0, ownedCount: 0, percent: 0 },
+    busyCollectionId: ''
   },
 
   onShow() {
-    this.refreshPage();
+    this.loadCollections();
   },
 
-  refreshPage() {
-    const category = this.data.categories[this.data.categoryIndex].id;
-    const ownedStatus = this.data.statusOptions[this.data.statusIndex].id;
+  async loadCollections() {
+    this.setData({ loading: true, loadError: '' });
+    try {
+      const allCollections = await collectionService.listCollections();
+      const primaryOptions = [ALL, ...this.unique(allCollections.map((item) => item.primaryCategory))];
+      const styleOptions = this.buildStyleOptions(allCollections);
+      this.setData({ allCollections, primaryOptions, styleOptions, loading: false });
+      this.applyFilters();
+    } catch (error) {
+      this.setData({ loading: false, loadError: error.message || '藏品加载失败' });
+    }
+  },
+
+  unique(values) {
+    return values.filter(Boolean).filter((value, index, list) => list.indexOf(value) === index);
+  },
+
+  buildStyleOptions(collections) {
+    const available = this.unique(collections.map((item) => item.productStyle));
+    const ordered = STYLE_ORDER.filter((style) => available.includes(style));
+    const extras = available.filter((style) => !STYLE_ORDER.includes(style));
+    return [ALL, ...ordered, ...extras];
+  },
+
+  applyFilters() {
+    const { allCollections, appliedFilters } = this.data;
+    const primary = appliedFilters.primary;
+    const secondary = appliedFilters.secondary;
+    const style = appliedFilters.style;
+    const status = appliedFilters.status;
+    const keyword = (appliedFilters.keyword || '').trim().toLowerCase();
+    const filtered = allCollections.filter((item) => {
+      const text = [item.collectionName, item.seriesName, item.saleType,
+        item.primaryCategory, item.secondaryCategory, item.productStyle]
+        .join(' ').toLowerCase();
+      return (primary === ALL || item.primaryCategory === primary) &&
+        (secondary === ALL || item.secondaryCategory === secondary) &&
+        (style === ALL || item.productStyle === style) &&
+        (status === '全部' || (status === '已点亮' ? item.isOwned : !item.isOwned)) &&
+        (!keyword || text.includes(keyword));
+    });
+    const ownedCount = new Set(allCollections.filter((item) => item.isOwned).map((item) => item.collectionId)).size;
+    const total = new Set(allCollections.map((item) => item.collectionId)).size;
     this.setData({
-      collections: collectionService.filterCollections({
-        category,
-        ownedStatus,
+      groups: this.buildGroups(filtered),
+      progress: { total, ownedCount, percent: total ? Math.round(ownedCount * 100 / total) : 0 }
+    });
+  },
+
+  buildGroups(collections) {
+    const oldState = {};
+    this.data.groups.forEach((primary) => {
+      oldState[primary.name] = primary.expanded;
+      primary.children.forEach((secondary) => { oldState[`${primary.name}/${secondary.name}`] = secondary.expanded; });
+    });
+    const result = [];
+    collections.forEach((item) => {
+      let primary = result.find((group) => group.name === item.primaryCategory);
+      if (!primary) {
+        primary = { name: item.primaryCategory, count: 0, expanded: oldState[item.primaryCategory] !== false, children: [] };
+        result.push(primary);
+      }
+      primary.count += 1;
+      let secondary = primary.children.find((group) => group.name === item.secondaryCategory);
+      if (!secondary) {
+        secondary = { name: item.secondaryCategory, expanded: oldState[`${primary.name}/${item.secondaryCategory}`] !== false, items: [] };
+        primary.children.push(secondary);
+      }
+      secondary.items.push({ ...item, ...this.getNameDisplay(item.collectionName) });
+    });
+    result.forEach((primary) => {
+      primary.hasSecondaryLevel = primary.children.some((secondary) => secondary.name !== '未分类');
+    });
+    return result;
+  },
+
+  getNameDisplay(name) {
+    const text = String(name || '');
+    const visualLength = Array.from(text).reduce((total, char) =>
+      total + (/^[\x00-\xff]$/.test(char) ? 0.55 : 1), 0);
+    return {
+      isLongName: visualLength > 9,
+      marqueeDuration: Math.max(9, Math.round(visualLength * 0.9 * 10) / 10)
+    };
+  },
+
+  handleKeywordInput(event) { this.setData({ keyword: event.detail.value }); },
+  handlePrimaryChange(event) {
+    const primaryIndex = Number(event.detail.value);
+    const primary = this.data.primaryOptions[primaryIndex];
+    const primaryCollections = primary === ALL
+      ? this.data.allCollections
+      : this.data.allCollections.filter((item) => item.primaryCategory === primary);
+    const secondaryOptions = primary === ALL
+      ? [ALL]
+      : [ALL, ...this.unique(primaryCollections.map((item) => item.secondaryCategory))];
+    const styleOptions = this.buildStyleOptions(primaryCollections);
+    this.setData({ primaryIndex, secondaryOptions, secondaryIndex: 0, styleOptions, styleIndex: 0 });
+  },
+  handleSecondaryChange(event) { this.setData({ secondaryIndex: Number(event.detail.value) }); },
+  handleStyleChange(event) { this.setData({ styleIndex: Number(event.detail.value) }); },
+  handleStatusChange(event) { this.setData({ statusIndex: Number(event.detail.value) }); },
+  handleConfirmFilter() {
+    this.setData({
+      appliedFilters: {
+        primary: this.data.primaryOptions[this.data.primaryIndex] || ALL,
+        secondary: this.data.secondaryOptions[this.data.secondaryIndex] || ALL,
+        style: this.data.styleOptions[this.data.styleIndex] || ALL,
+        status: this.data.statusOptions[this.data.statusIndex] || '全部',
         keyword: this.data.keyword
-      }),
-      progress: collectionService.getCollectionProgress()
+      }
     });
+    this.applyFilters();
   },
-
-  handleKeywordInput(event) {
-    this.setData({
-      keyword: event.detail.value
-    });
-    this.refreshPage();
-  },
-
-  handleCategoryChange(event) {
-    this.setData({
-      categoryIndex: Number(event.detail.value)
-    });
-    this.refreshPage();
-  },
-
-  handleStatusChange(event) {
-    this.setData({
-      statusIndex: Number(event.detail.value)
-    });
-    this.refreshPage();
-  },
-
   handleClearFilter() {
     this.setData({
-      keyword: '',
-      categoryIndex: 0,
-      statusIndex: 0
+      keyword: '', primaryIndex: 0, secondaryIndex: 0, secondaryOptions: [ALL],
+      styleOptions: this.buildStyleOptions(this.data.allCollections), styleIndex: 0, statusIndex: 0,
+      appliedFilters: { primary: ALL, secondary: ALL, style: ALL, status: '全部', keyword: '' }
     });
-    this.refreshPage();
+    this.applyFilters();
   },
-
-  handleLightCollection(event) {
-    const { id } = event.currentTarget.dataset;
-    const result = collectionService.lightCollection(id);
-    if (!result.valid) {
-      wx.showToast({
-        title: result.message,
-        icon: 'none'
-      });
-      return;
-    }
-
-    wx.showModal({
-      title: '同步消费记录',
-      content: '已点亮该藏品，是否根据官方参考价同步生成一条消费记录？',
-      cancelText: '仅点亮',
-      confirmText: '生成记录',
-      confirmColor: '#c84d69',
-      success: (res) => {
-        if (res.confirm) {
-          const expenseResult = collectionService.createExpenseFromCollection(id);
-          wx.showToast({
-            title: expenseResult.valid ? '已生成记录' : expenseResult.message,
-            icon: expenseResult.valid ? 'success' : 'none'
-          });
-        } else {
-          wx.showToast({
-            title: '已点亮',
-            icon: 'success'
-          });
-        }
-        this.refreshPage();
-      }
-    });
+  togglePrimary(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    this.setData({ [`groups[${index}].expanded`]: !this.data.groups[index].expanded });
   },
-
-  handleUnlightCollection(event) {
-    const { id } = event.currentTarget.dataset;
-    const collection = this.data.collections.find((item) => item.collectionId === id);
-    const hasLinkedExpense = Boolean(collection && collection.expenseId);
-    wx.showModal({
-      title: '取消点亮',
-      content: hasLinkedExpense
-        ? '取消点亮后，是否同时删除这条藏品同步生成的消费记录？'
-        : '取消后仅更新图鉴状态。',
-      cancelText: hasLinkedExpense ? '保留记录' : '再想想',
-      confirmText: hasLinkedExpense ? '删除记录' : '取消点亮',
-      confirmColor: '#c84d69',
-      success: (res) => {
-        if (!res.confirm && !hasLinkedExpense) {
-          return;
-        }
-        collectionService.unlightCollection(id, {
-          deleteExpense: hasLinkedExpense && res.confirm
-        });
-        wx.showToast({
-          title: hasLinkedExpense && res.confirm ? '已删除记录' : '已取消',
-          icon: 'success'
-        });
-        this.refreshPage();
-      }
-    });
+  toggleSecondary(event) {
+    const primary = Number(event.currentTarget.dataset.primary);
+    const secondary = Number(event.currentTarget.dataset.secondary);
+    this.setData({ [`groups[${primary}].children[${secondary}].expanded`]: !this.data.groups[primary].children[secondary].expanded });
+  },
+  handleImageError(event) {
+    const id = event.currentTarget.dataset.id;
+    const allCollections = this.data.allCollections.map((item) => item.collectionId === id ? { ...item, imageFailed: true } : item);
+    this.setData({ allCollections }); this.applyFilters();
+  },
+  handleCollectionTap(event) {
+    const id = event.currentTarget.dataset.id;
+    const collection = this.data.allCollections.find((item) => item.collectionId === id);
+    if (!collection || this.data.busyCollectionId) return;
+    if (collection.isOwned) this.confirmUnlight(collection); else this.confirmLight(collection);
+  },
+  confirmLight(collection) {
+    wx.showModal({ title: '点亮藏品', content: `确认点亮“${collection.collectionName}”吗？`, confirmColor: '#E9A6B3',
+      success: async (res) => { if (res.confirm) await this.lightCollection(collection); } });
+  },
+  async lightCollection(collection) {
+    this.setData({ busyCollectionId: collection.collectionId });
+    try {
+      await collectionService.lightCollection(collection.collectionId);
+      this.updateOwned(collection.collectionId, true);
+      wx.showToast({ title: '已点亮', icon: 'success' });
+    } catch (error) { wx.showToast({ title: error.message || '点亮失败', icon: 'none' }); }
+    finally { this.setData({ busyCollectionId: '' }); }
+  },
+  confirmUnlight(collection) {
+    wx.showModal({ title: '取消点亮', content: `确认取消“${collection.collectionName}”的点亮状态吗？`, confirmText: '取消点亮', confirmColor: '#E9A6B3',
+      success: async (res) => {
+        if (!res.confirm) return;
+        this.setData({ busyCollectionId: collection.collectionId });
+        try { await collectionService.unlightCollection(collection.collectionId); this.updateOwned(collection.collectionId, false); wx.showToast({ title: '已取消点亮', icon: 'success' }); }
+        catch (error) { wx.showToast({ title: error.message || '取消失败', icon: 'none' }); }
+        finally { this.setData({ busyCollectionId: '' }); }
+      } });
+  },
+  updateOwned(collectionId, isOwned) {
+    this.setData({ allCollections: this.data.allCollections.map((item) => item.collectionId === collectionId ? { ...item, isOwned } : item) });
+    this.applyFilters();
   }
 });

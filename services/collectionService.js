@@ -1,151 +1,68 @@
-const collections = require('../data/collections');
-const categories = require('../data/categories');
-const expenseService = require('./expenseService');
-const storageService = require('./storageService');
+const apiService = require('./apiService');
+const collectionCatalogService = require('./collectionCatalogService');
+const config = require('./config');
 
-const USER_ID = 'local-user';
-const collectionCategories = categories.filter((item) => item.type === 'collection');
+const USER_ID = config.userId || 'local-user';
 
-function getCategoryName(categoryId) {
-  const category = collectionCategories.find((item) => item.id === categoryId);
-  return category ? category.name : '其他藏品';
+function normalizeCollection(item = {}) {
+  return {
+    collectionId: String(item.collectionId || ''),
+    collectionName: item.collectionName || '未命名藏品',
+    saleType: item.saleType || '',
+    collectionCategory: item.collectionCategory || item.category || '其他',
+    primaryCategory: item.primaryCategory || '其他',
+    secondaryCategory: item.secondaryCategory || '未分类',
+    productStyle: item.productStyle || '未标注',
+    saleDateText: item.saleDateText || '',
+    stageId: item.stageId || '',
+    referencePrice: item.referencePrice,
+    priceText: item.priceText || '',
+    brand: item.brand || '',
+    seriesName: item.seriesName || '',
+    imageUrl: item.imageUrl || '',
+    isOwned: Boolean(item.isOwned),
+    lightTime: item.lightTime || '',
+    imageFailed: false
+  };
 }
 
-function getCollectionById(collectionId) {
-  return collections.find((item) => item.collectionId === collectionId);
-}
-
-function listCollections() {
-  const userCollections = storageService.getCollection(USER_ID, 'userCollections');
-  return collections.map((item) => {
-    const userState = userCollections.find((state) => state.collectionId === item.collectionId);
+async function listCollections() {
+  const [catalog, userStates] = await Promise.all([
+    collectionCatalogService.listCollections(),
+    apiService.request({
+      url: `/user-collections${apiService.buildQuery({ userId: USER_ID })}`
+    })
+  ]);
+  const states = new Map((userStates || []).map((item) => [String(item.collectionId), item]));
+  return (catalog || []).map((item) => {
+    const normalized = normalizeCollection(item);
+    const state = states.get(normalized.collectionId);
     return {
-      ...item,
-      categoryName: getCategoryName(item.category),
-      isOwned: Boolean(userState && userState.isOwned),
-      lightTime: userState ? userState.lightTime : '',
-      expenseId: userState ? userState.expenseId : ''
+      ...normalized,
+      isOwned: Boolean(state && state.isOwned),
+      lightTime: state ? state.lightTime || '' : ''
     };
   });
 }
 
-function filterCollections(filter) {
-  const keyword = (filter.keyword || '').trim();
-  const category = filter.category || 'all';
-  const ownedStatus = filter.ownedStatus || 'all';
-  return listCollections().filter((item) => {
-    const categoryMatched = category === 'all' || item.category === category;
-    const keywordMatched =
-      !keyword ||
-      item.collectionName.indexOf(keyword) >= 0 ||
-      (item.description || '').indexOf(keyword) >= 0;
-    const statusMatched =
-      ownedStatus === 'all' ||
-      (ownedStatus === 'owned' && item.isOwned) ||
-      (ownedStatus === 'missing' && !item.isOwned);
-    return categoryMatched && keywordMatched && statusMatched;
+function setOwned(collectionId, isOwned) {
+  return apiService.request({
+    url: `/user-collections/${isOwned ? 'light' : 'unlight'}`,
+    method: 'POST',
+    data: { userId: USER_ID, collectionId }
   });
-}
-
-function setCollectionOwned(collectionId, isOwned, options = {}) {
-  const userCollections = storageService.getCollection(USER_ID, 'userCollections');
-  const exists = userCollections.find((item) => item.collectionId === collectionId);
-  if (exists) {
-    if (!isOwned && options.deleteExpense && exists.expenseId) {
-      expenseService.removeExpense(exists.expenseId);
-      exists.expenseId = '';
-    }
-    exists.isOwned = isOwned;
-    exists.lightTime = isOwned ? new Date().toISOString() : '';
-  } else {
-    userCollections.push({
-      userId: USER_ID,
-      collectionId,
-      isOwned,
-      lightTime: isOwned ? new Date().toISOString() : '',
-      expenseId: ''
-    });
-  }
-  storageService.setCollection(USER_ID, 'userCollections', userCollections);
-  return {
-    valid: true,
-    data: listCollections().find((item) => item.collectionId === collectionId)
-  };
 }
 
 function lightCollection(collectionId) {
-  return setCollectionOwned(collectionId, true);
+  return setOwned(collectionId, true);
 }
 
-function unlightCollection(collectionId, options = {}) {
-  return setCollectionOwned(collectionId, false, options);
-}
-
-function createExpenseFromCollection(collectionId) {
-  const collection = getCollectionById(collectionId);
-  if (!collection) {
-    return { valid: false, message: '图鉴项目不存在' };
-  }
-  const expenseType = collection.category === 'album' ? 'album' : 'goods';
-  const subTypeMap = {
-    album: 'album_utopia',
-    magazine: 'magazine',
-    goods: 'other_goods',
-    card: 'photo_card',
-    endorsement: 'other_goods'
-  };
-  const expenseResult = expenseService.addExpense({
-    category: expenseType,
-    subType: subTypeMap[collection.category] || 'other_goods',
-    itemName: collection.collectionName,
-    amount: collection.referencePrice || 0,
-    quantity: 1,
-    date: getToday(),
-    paymentMethod: '微信支付',
-    remark: '由藏品图鉴点亮同步生成',
-    includeInTotal: true,
-    collectionId: collection.collectionId
-  });
-  if (!expenseResult.valid) {
-    return expenseResult;
-  }
-
-  const userCollections = storageService.getCollection(USER_ID, 'userCollections');
-  const exists = userCollections.find((item) => item.collectionId === collectionId);
-  if (exists) {
-    exists.expenseId = expenseResult.data.expenseId;
-  }
-  storageService.setCollection(USER_ID, 'userCollections', userCollections);
-  return {
-    valid: true,
-    data: expenseResult.data
-  };
-}
-
-function getCollectionProgress() {
-  const list = listCollections();
-  const ownedCount = list.filter((item) => item.isOwned).length;
-  const percent = list.length > 0 ? Math.round((ownedCount / list.length) * 100) : 0;
-  return {
-    total: list.length,
-    ownedCount,
-    percent
-  };
-}
-
-function getToday() {
-  const date = new Date();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
+function unlightCollection(collectionId) {
+  return setOwned(collectionId, false);
 }
 
 module.exports = {
-  collectionCategories,
   listCollections,
-  filterCollections,
   lightCollection,
-  unlightCollection,
-  createExpenseFromCollection,
-  getCollectionProgress
+  unlightCollection
 };

@@ -1,17 +1,11 @@
 <view class="page">
   <text class="page-title">藏品图鉴</text>
-  <text class="page-subtitle">浏览公共藏品图鉴，点亮状态只保存在当前用户本地缓存中。</text>
+  <text class="page-subtitle">公共资料与点亮状态均同步自云端。</text>
 
-  <view class="card">
+  <view class="card progress-card">
     <view class="row">
-      <view>
-        <text class="muted">已拥有</text>
-        <text class="metric">{{progress.ownedCount}}/{{progress.total}}</text>
-      </view>
-      <view>
-        <text class="muted">完成度</text>
-        <text class="metric">{{progress.percent}}%</text>
-      </view>
+      <text>已拥有 {{progress.ownedCount}} / {{progress.total}}</text>
+      <text class="percent">{{progress.percent}}%</text>
     </view>
     <view class="progress-track">
       <view class="progress-fill" style="width: {{progress.percent}}%;"></view>
@@ -19,34 +13,70 @@
   </view>
 
   <view class="toolbar card">
-    <input class="search-input" value="{{keyword}}" placeholder="搜索藏品名称或说明" bindinput="handleKeywordInput" />
+    <input class="search-input" value="{{keyword}}" placeholder="搜索藏品名称或所属系列" bindinput="handleKeywordInput" />
     <view class="filter-grid">
-      <picker mode="selector" range="{{categories}}" range-key="name" value="{{categoryIndex}}" bindchange="handleCategoryChange">
-        <view class="picker-field">{{categories[categoryIndex].name}}</view>
+      <picker range="{{primaryOptions}}" value="{{primaryIndex}}" bindchange="handlePrimaryChange">
+        <view class="picker-field">一级：{{primaryOptions[primaryIndex]}}</view>
       </picker>
-      <picker mode="selector" range="{{statusOptions}}" range-key="name" value="{{statusIndex}}" bindchange="handleStatusChange">
-        <view class="picker-field">{{statusOptions[statusIndex].name}}</view>
+      <picker range="{{secondaryOptions}}" value="{{secondaryIndex}}" bindchange="handleSecondaryChange">
+        <view class="picker-field">二级：{{secondaryOptions[secondaryIndex]}}</view>
+      </picker>
+      <picker range="{{styleOptions}}" value="{{styleIndex}}" bindchange="handleStyleChange">
+        <view class="picker-field">款式：{{styleOptions[styleIndex]}}</view>
+      </picker>
+      <picker range="{{statusOptions}}" value="{{statusIndex}}" bindchange="handleStatusChange">
+        <view class="picker-field">状态：{{statusOptions[statusIndex]}}</view>
       </picker>
     </view>
-    <button class="secondary-button compact-button" bindtap="handleClearFilter">重置筛选</button>
+    <view class="filter-actions">
+      <button class="primary-button compact-button" bindtap="handleConfirmFilter">确定查询</button>
+      <button class="secondary-button compact-button" bindtap="handleClearFilter">一键重置</button>
+    </view>
   </view>
 
-  <view class="card" wx:if="{{collections.length === 0}}">
-    <view class="empty">暂无符合条件的藏品。</view>
+  <view class="card state-card" wx:if="{{loading}}">正在加载藏品图鉴…</view>
+  <view class="card state-card" wx:elif="{{loadError}}">
+    <text>{{loadError}}</text>
+    <button class="secondary-button" bindtap="loadCollections">重新加载</button>
+  </view>
+  <view class="card state-card" wx:elif="{{groups.length === 0}}">
+    <text>暂无符合条件的藏品</text>
+    <button class="secondary-button" bindtap="handleClearFilter">重置筛选</button>
   </view>
 
-  <view class="card collection-card" wx:for="{{collections}}" wx:key="collectionId">
-    <view class="row">
-      <text class="card-title">{{item.collectionName}}</text>
-      <text class="tag">{{item.categoryName}}</text>
-    </view>
-    <text class="muted">{{item.description}}</text>
-    <view class="row info-row">
-      <text class="price">￥{{item.referencePrice}}</text>
-      <text class="{{item.isOwned ? 'owned-text' : 'missing-text'}}">{{item.isOwned ? '已点亮' : '未点亮'}}</text>
-    </view>
-    <text class="muted" wx:if="{{item.expenseId}}">已同步消费记录：{{item.expenseId}}</text>
-    <button wx:if="{{item.isOwned}}" class="secondary-button" data-id="{{item.collectionId}}" bindtap="handleUnlightCollection">取消点亮</button>
-    <button wx:else class="primary-button" data-id="{{item.collectionId}}" bindtap="handleLightCollection">点亮藏品</button>
-  </view>
+  <block wx:if="{{!loading && !loadError && groups.length > 0}}">
+    <block wx:for="{{groups}}" wx:for-item="primary" wx:for-index="primaryIndex" wx:key="name">
+      <view class="group-header primary-header" data-index="{{primaryIndex}}" bindtap="togglePrimary">
+        <text>{{primary.expanded ? '▾' : '▸'}} {{primary.name}}</text>
+        <text class="primary-count">{{primary.count}}件</text>
+      </view>
+      <block wx:if="{{primary.expanded}}">
+        <block wx:for="{{primary.children}}" wx:for-item="secondary" wx:for-index="secondaryIndex" wx:key="name">
+          <view wx:if="{{primary.hasSecondaryLevel}}" class="group-header secondary-header" data-primary="{{primaryIndex}}" data-secondary="{{secondaryIndex}}" bindtap="toggleSecondary">
+            <text>{{secondary.expanded ? '−' : '+'}} {{secondary.name}}</text>
+          </view>
+          <view class="collection-grid" wx:if="{{!primary.hasSecondaryLevel || secondary.expanded}}">
+            <view class="collection-item {{item.isOwned ? 'owned' : 'missing'}}" wx:for="{{secondary.items}}" wx:key="collectionId" data-id="{{item.collectionId}}" bindtap="handleCollectionTap">
+              <view class="image-box">
+                <image wx:if="{{item.imageUrl && !item.imageFailed}}" class="collection-image" src="{{item.imageUrl}}" mode="aspectFill" data-id="{{item.collectionId}}" binderror="handleImageError" />
+                <view wx:else class="image-placeholder">
+                  <text>暂无图片</text>
+                </view>
+                <text class="owned-badge" wx:if="{{item.isOwned}}">已拥有</text>
+              </view>
+              <view class="name-box {{item.isLongName ? 'name-marquee' : ''}}">
+                <view wx:if="{{item.isLongName}}" class="marquee-track" style="animation-duration: {{item.marqueeDuration}}s;">
+                  <text class="item-name marquee-copy">{{item.collectionName}}</text>
+                  <text class="item-name marquee-copy">{{item.collectionName}}</text>
+                </view>
+                <text wx:else class="item-name">{{item.collectionName}}</text>
+              </view>
+              <text class="item-date">{{item.saleDateText || '日期待补充'}}</text>
+              <text class="style-tag">{{item.productStyle}}</text>
+            </view>
+          </view>
+        </block>
+      </block>
+    </block>
+  </block>
 </view>

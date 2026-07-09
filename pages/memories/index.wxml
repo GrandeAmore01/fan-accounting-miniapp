@@ -10,48 +10,135 @@
   </view>
 
   <view class="memory-card intro-card">
-    <text class="memory-eyebrow">见面记忆</text>
-    <text class="memory-title">小粉丝你好！</text>
-    <block wx:if="{{report.hasRecords}}">
-      <text class="memory-line">你已经在{{report.typeName}}上见面 <text class="highlight">{{report.meetCount}}</text> 次啦！</text>
-      <text class="memory-line">你已经走过 <text class="highlight">{{report.cityCount}}</text> 个城市，场馆累计 <text class="highlight">{{report.venueCount}}</text> 座。</text>
-      <text class="memory-line">去过最多的城市是 <text class="highlight">{{report.topCity.name}}</text>，一共 <text class="highlight">{{report.topCity.count}}</text> 次。</text>
-      <text class="memory-line">你第一次走进的是 <text class="highlight">{{report.firstCityName}}</text> 的 <text class="highlight">{{report.firstVenueName}}</text>。</text>
-      <text class="memory-line">去过最多的场馆是 <text class="highlight">{{report.topVenue.name}}</text>，这座场馆见证了 <text class="highlight">{{report.topVenue.count}}</text> 次见面。</text>
-      <view class="memory-date-row">
-        <text class="date-pill">最早：{{report.earliestDateText}}</text>
-        <text class="date-pill">最近：{{report.latestDateText}}</text>
+    <view class="section-head">
+      <text class="memory-eyebrow">年度回忆</text>
+      <picker mode="selector" range="{{yearOptions}}" range-key="name" value="{{yearIndex}}" bindchange="handleYearChange">
+        <view class="picker-field compact-picker">{{yearOptions[yearIndex].name}}</view>
+      </picker>
+    </view>
+    <block wx:if="{{annualReport.hasRecords}}">
+      <text class="memory-line">{{annualReport.year}} 年你一共见面 <text class="highlight">{{annualReport.meetCount}}</text> 次。</text>
+      <text class="memory-line">本年度解锁歌曲 <text class="highlight">{{annualReport.unlockedSongCount}}</text> 首，走过 <text class="highlight">{{annualReport.cityCount}}</text> 个城市。</text>
+      <text class="memory-line">舞台相关花费 <text class="highlight">{{annualReport.stageSpending}}</text> 元，关联消费 <text class="highlight">{{annualReport.expenseCount}}</text> 笔。</text>
+      <text class="memory-line">歌曲累计出现 <text class="highlight">{{annualReport.songAppearCount}}</text> 次，常去城市是 <text class="highlight">{{annualReport.topCity.name}}</text>。</text>
+      <text class="muted section-gap">本年度常听歌曲</text>
+      <text class="section-hint block-hint">仅统计 {{annualReport.year}} 年、{{typeOptions[activeTypeIndex].name}}已点亮场次</text>
+      <view class="song-item" wx:for="{{annualReport.topSongs}}" wx:key="songName">
+        <text class="song-name">{{item.songName}}</text>
+        <text class="tag">本年 {{item.count}} 次</text>
       </view>
     </block>
     <block wx:else>
+      <text class="memory-line">这一年还没有点亮记录，去舞台记录页点亮场次后这里会生成年度报告。</text>
+    </block>
+  </view>
+
+  <view class="memory-card">
+    <view class="section-head">
+      <text class="section-title">我的观演日历</text>
+      <text class="section-hint">{{yearOptions[yearIndex].name}}</text>
+    </view>
+    <view wx:if="{{calendar.length === 0}}" class="empty">该年份暂无已点亮场次，去舞台记录页点亮后这里会显示观演安排。</view>
+    <view class="calendar-month" wx:for="{{calendar}}" wx:key="month">
+      <view class="row">
+        <text class="song-name">{{item.monthLabel}}</text>
+        <text class="muted">看过 {{item.watchedCount}} · 待看 {{item.upcomingCount}}</text>
+      </view>
+      <view class="calendar-item" wx:for="{{item.items}}" wx:for-item="stageItem" wx:key="stageId" data-id="{{stageItem.stageId}}" bindtap="handleOpenDetail">
+        <text class="song-name">{{stageItem.stageName}}</text>
+        <text class="muted">{{stageItem.date}} · {{stageItem.cityName}} · {{stageItem.calendarStatusText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="memory-card">
+    <view class="section-head">
+      <text class="section-title">全历程歌单收藏</text>
+      <text class="section-hint">已听 {{songCollection.heardCount}} / 曲库 {{songCollection.libraryCount}}</text>
+    </view>
+    <text class="section-hint block-hint">统计所有年份已点亮场次，不随上方年份切换</text>
+    <view wx:if="{{songCollection.isComplete}}" class="empty">恭喜，曲库里的歌你都听过啦！</view>
+    <text class="muted section-gap">历年最常听到的歌</text>
+    <view wx:if="{{songCollection.topHeardSongs.length === 0}}" class="empty">点亮场次后会统计历年常听歌曲。</view>
+    <view class="song-item" wx:for="{{songCollection.topHeardSongs}}" wx:key="songName">
+      <text class="song-name">{{item.songName}}</text>
+      <text class="tag">累计 {{item.count}} 次</text>
+    </view>
+    <text class="muted section-gap">还没听过的歌</text>
+    <view wx:if="{{songCollection.unheardSongs.length === 0 && songCollection.heardCount > 0}}" class="empty">当前没有未听歌曲。</view>
+    <view class="song-item" wx:for="{{songCollection.unheardSongs}}" wx:key="songName">
+      <text class="song-name">{{item.songName}}</text>
+      <text class="tag">{{item.stageCount}} 场可听</text>
+    </view>
+  </view>
+
+  <view class="memory-card">
+    <view class="section-head">
+      <text class="section-title">回忆图片墙</text>
+      <text class="section-hint">按场次汇总</text>
+    </view>
+    <view wx:if="{{!photoWall.hasPhotos}}" class="empty">还没有回忆照片，去舞台详情页上传现场照片吧。</view>
+    <view class="photo-wall-group" wx:for="{{photoWall.groups}}" wx:for-index="groupIndex" wx:key="stageId">
+      <view class="row" data-id="{{item.stageId}}" bindtap="handleOpenDetail">
+        <text class="song-name">{{item.stageName}}</text>
+        <text class="muted">{{item.date}} · {{item.city}}</text>
+      </view>
+      <view class="photo-grid">
+        <image
+          wx:for="{{item.photos}}"
+          wx:for-item="photo"
+          wx:for-index="photoIndex"
+          wx:key="*this"
+          class="photo-thumb"
+          src="{{photo}}"
+          mode="aspectFill"
+          data-group-index="{{groupIndex}}"
+          data-photo-index="{{photoIndex}}"
+          bindtap="handlePreviewPhoto"
+        />
+      </view>
+    </view>
+  </view>
+
+  <view class="memory-card intro-card">
+    <text class="memory-eyebrow">见面记忆</text>
+    <block wx:if="{{report.hasRecords}}">
+      <text class="memory-line">你已经在{{report.typeName}}上见面 <text class="highlight">{{report.meetCount}}</text> 次啦！</text>
+      <text class="memory-line">去过最多的城市是 <text class="highlight">{{report.topCity.name}}</text>，一共 <text class="highlight">{{report.topCity.count}}</text> 次。</text>
+    </block>
+    <block wx:else>
       <text class="memory-line">还没有点亮{{report.typeName}}见面记录。</text>
-      <text class="memory-line">去舞台记录里点亮看过的场次后，这里会生成你的专属足迹。</text>
     </block>
   </view>
 
   <view class="memory-card">
     <view class="section-head">
       <text class="section-title">城市足迹</text>
-      <text class="section-hint">次数优先 · 最近一次见面优先</text>
+      <text class="section-hint">次数优先 · 最近见面优先</text>
     </view>
-    <view wx:if="{{report.cityRanking.length === 0}}" class="empty">暂无城市足迹</view>
+    <view wx:if="{{report.cityRanking.length === 0}}" class="empty">暂无城市足迹，先去点亮场次吧。</view>
     <view class="rank-item" wx:for="{{report.cityRanking}}" wx:key="name">
       <text class="rank-badge">{{item.rank}}</text>
-      <text class="rank-name">{{item.name}}</text>
-      <text class="rank-count">{{item.count}} 次</text>
+      <text class="rank-name">{{item.name}} · {{item.count}} 次</text>
     </view>
   </view>
 
   <view class="memory-card">
     <view class="section-head">
-      <text class="section-title">场馆统计</text>
-      <text class="section-hint">按场馆累计 · 最近一次见面优先</text>
+      <text class="section-title">同行人档案</text>
+      <text class="section-hint">来自观演备注</text>
     </view>
-    <view wx:if="{{report.venueRanking.length === 0}}" class="empty">暂无场馆统计</view>
-    <view class="rank-item" wx:for="{{report.venueRanking}}" wx:key="name">
-      <text class="rank-badge">{{item.rank}}</text>
-      <text class="rank-name">{{item.name}}</text>
-      <text class="rank-count">{{item.count}} 次</text>
+    <view wx:if="{{companions.length === 0}}" class="empty">还没有同行人记录，请先在舞台详情页的观演备注中填写同行人。</view>
+    <view class="rank-item" wx:for="{{companions}}" wx:key="name" data-name="{{item.name}}" bindtap="handleCompanionTap">
+      <text class="rank-badge">{{item.count}}</text>
+      <text class="rank-name">{{item.name}} · {{item.count}} 场</text>
+    </view>
+    <view wx:if="{{activeCompanion}}" class="companion-detail">
+      <text class="song-name">与 {{activeCompanion.name}} 共同观演</text>
+      <view class="calendar-item" wx:for="{{activeCompanion.stages}}" wx:key="stageId" data-id="{{item.stageId}}" bindtap="handleOpenDetail">
+        <text class="song-name">{{item.stageName}}</text>
+        <text class="muted">{{item.date}} · {{item.city}}</text>
+      </view>
     </view>
   </view>
 

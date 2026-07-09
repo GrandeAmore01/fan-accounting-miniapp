@@ -6,10 +6,10 @@ USE fan_accounting;
 
 CREATE TABLE IF NOT EXISTS users (
   user_id VARCHAR(64) PRIMARY KEY,
-  nickname VARCHAR(100) NOT NULL DEFAULT '本地用户',
+  nickname VARCHAR(100) NOT NULL,
   login_status TINYINT(1) NOT NULL DEFAULT 0,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO users (user_id, nickname, login_status)
@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS expenses (
   payment_method VARCHAR(64) NOT NULL DEFAULT '',
   seat VARCHAR(120) NOT NULL DEFAULT '',
   location VARCHAR(255) NOT NULL DEFAULT '',
+  city VARCHAR(120) NOT NULL DEFAULT '',
+  purchase_channel VARCHAR(32) NOT NULL DEFAULT 'none',
+  pricing_mode VARCHAR(32) NOT NULL DEFAULT 'direct',
+  reference_price DECIMAL(10,2) NULL,
+  unit_price DECIMAL(10,2) NULL,
+  expense_source VARCHAR(32) NOT NULL DEFAULT 'manual',
   remark VARCHAR(500) NOT NULL DEFAULT '',
   images_json JSON NULL,
   fees_json JSON NULL,
@@ -40,11 +46,54 @@ CREATE TABLE IF NOT EXISTS expenses (
   base_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   included_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_expenses_user_date (user_id, expense_date),
   INDEX idx_expenses_user_category (user_id, category),
   CONSTRAINT fk_expenses_user
     FOREIGN KEY (user_id) REFERENCES users(user_id)
     ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS collections (
+  collection_id VARCHAR(64) PRIMARY KEY,
+  collection_name VARCHAR(255) NOT NULL,
+  sale_type VARCHAR(64) NOT NULL DEFAULT '',
+  collection_category VARCHAR(64) NOT NULL DEFAULT '',
+  primary_category VARCHAR(64) NOT NULL DEFAULT '',
+  secondary_category VARCHAR(64) NOT NULL DEFAULT '',
+  product_style VARCHAR(64) NOT NULL DEFAULT '',
+  sale_date DATE NULL,
+  sale_date_text VARCHAR(64) NOT NULL DEFAULT '',
+  stage_id VARCHAR(64) NULL,
+  reference_price DECIMAL(10,2) NULL,
+  price_text VARCHAR(64) NOT NULL DEFAULT '',
+  acquisition_type VARCHAR(32) NOT NULL DEFAULT 'purchase',
+  price_note VARCHAR(255) NOT NULL DEFAULT '',
+  brand VARCHAR(255) NOT NULL DEFAULT '',
+  series_name VARCHAR(255) NOT NULL DEFAULT '',
+  image_url VARCHAR(500) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_collections_name (collection_name),
+  INDEX idx_collections_category (
+    collection_category, primary_category, secondary_category
+  ),
+  INDEX idx_collections_style (product_style),
+  INDEX idx_collections_stage (stage_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `user_collections` (
+  `user_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `collection_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_owned` tinyint(1) NOT NULL DEFAULT '0',
+  `light_time` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`,`collection_id`),
+  KEY `idx_user_collections_collection` (`collection_id`),
+  KEY `idx_user_collections_owned` (`user_id`,`is_owned`),
+  CONSTRAINT `fk_user_collections_collection` FOREIGN KEY (`collection_id`) REFERENCES `collections` (`collection_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_user_collections_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

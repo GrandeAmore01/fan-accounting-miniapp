@@ -1,86 +1,35 @@
-.card .muted {
-  display: block;
-  margin-top: 10rpx;
+.progress-card { font-size: 26rpx; }
+.percent { color: #b48a00; font-size: 36rpx; font-weight: 700; }
+.progress-track { height: 18rpx; margin-top: 20rpx; overflow: hidden; border-radius: 999rpx; background: #f4e6a8; }
+.progress-fill { height: 100%; border-radius: 999rpx; background: #f5c400; }
+.toolbar { display: flex; flex-direction: column; gap: 16rpx; }
+.search-input, .picker-field { width: 100%; min-height: 68rpx; padding: 0 18rpx; border: 1rpx solid #e8d17b; border-radius: 12rpx; background: #fff; font-size: 24rpx; line-height: 68rpx; }
+.filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14rpx; }
+.filter-actions { display: flex; align-items: center; width: 100%; }
+.filter-actions .compact-button { flex: 1 1 0; width: 0; min-width: 0; max-width: none; }
+.filter-actions .compact-button + .compact-button { margin-left: 18rpx; }
+.compact-button { height: 62rpx; margin: 0; padding: 0 12rpx; font-size: 24rpx; }
+.state-card { display: flex; flex-direction: column; align-items: center; gap: 20rpx; color: #837965; text-align: center; }
+.state-card button { width: 240rpx; margin: 0; }
+.group-header { display: flex; align-items: center; justify-content: space-between; }
+.primary-header { margin: 28rpx 0 14rpx; padding: 22rpx 24rpx; border-radius: 16rpx; background: #f5c400; font-size: 30rpx; font-weight: 700; }
+.primary-count { font-size: 24rpx; font-weight: 500; }
+.secondary-header { margin: 18rpx 0 12rpx; padding: 14rpx 18rpx; border-left: 8rpx solid #e2b900; background: #fff8d9; color: #665000; font-size: 25rpx; }
+.collection-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14rpx; }
+.collection-item { min-width: 0; overflow: hidden; border: 1rpx solid #eadca7; border-radius: 14rpx; background: #fffdf7; box-shadow: 0 5rpx 14rpx rgba(127,93,0,.06); }
+.image-box { position: relative; width: 100%; padding-top: 100%; overflow: hidden; background: #eee8d8; }
+.collection-image, .image-placeholder { position: absolute; inset: 0; width: 100%; height: 100%; }
+.missing .collection-image { filter: grayscale(1); opacity: .58; }
+.image-placeholder { display: flex; align-items: center; justify-content: center; color: #9b927d; font-size: 21rpx; background: linear-gradient(135deg,#f2ede2,#ddd5c4); }
+.missing .image-placeholder { filter: grayscale(1); opacity: .7; }
+.owned-badge { position: absolute; top: 8rpx; right: 8rpx; padding: 5rpx 9rpx; border-radius: 999rpx; background: #E9A6B3; color: #fff; font-size: 18rpx; }
+.name-box { width: calc(100% - 16rpx); height: 34rpx; margin: 10rpx 8rpx 0; overflow: hidden; white-space: nowrap; }
+.item-name { display: inline-block; color: #2d2718; font-size: 23rpx; font-weight: 650; line-height: 34rpx; white-space: nowrap; }
+.marquee-track { display: inline-flex; width: max-content; will-change: transform; animation: collection-name-marquee 9s linear infinite; }
+.marquee-copy { padding-right: 44rpx; }
+@keyframes collection-name-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
 }
-
-.card button {
-  margin-top: 20rpx;
-}
-
-.progress-track {
-  height: 20rpx;
-  margin-top: 24rpx;
-  overflow: hidden;
-  border-radius: 999rpx;
-  background: #f4e6a8;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 999rpx;
-  background: #f5c400;
-}
-
-.toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-}
-
-.search-input,
-.picker-field {
-  width: 100%;
-  min-height: 72rpx;
-  padding: 0 22rpx;
-  border: 1rpx solid #e8d17b;
-  border-radius: 12rpx;
-  background: #ffffff;
-  color: #252116;
-  font-size: 26rpx;
-  line-height: 72rpx;
-}
-
-.filter-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16rpx;
-}
-
-.compact-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 64rpx;
-  margin: 0;
-  font-size: 25rpx;
-  line-height: 1;
-  text-align: center;
-}
-
-.collection-card {
-  position: relative;
-}
-
-.info-row {
-  margin-top: 18rpx;
-}
-
-.price {
-  color: #b48a00;
-  font-size: 36rpx;
-  font-weight: 700;
-}
-
-.owned-text,
-.missing-text {
-  font-size: 25rpx;
-  font-weight: 600;
-}
-
-.owned-text {
-  color: #4d8160;
-}
-
-.missing-text {
-  color: #837965;
-}
+.item-date { display: block; min-height: 32rpx; margin: 5rpx 8rpx; color: #8a806c; font-size: 19rpx; }
+.style-tag { display: inline-block; margin: 0 8rpx 10rpx; padding: 4rpx 9rpx; border-radius: 999rpx; background: #fff0b5; color: #806200; font-size: 18rpx; }

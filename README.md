@@ -14,7 +14,7 @@ https://github.com/GrandeAmore01/fan-accounting-miniapp
 - 每位组员从最新 `main` 新建自己的 `feature/*` 分支开发。
 - 每个人优先只修改自己负责的 `pages/xxx/` 页面目录。
 - 所有合并必须通过 Pull Request，由组长检查后再合并。
-- 公共文件默认由组长维护，确实需要修改时先在群里说明原因。
+- 公共文件默认由组长维护，需要修改时需要遵循时间安排。
 - 遇到 conflict 不要自行乱合并，先联系组长处理。
 
 详细规则见：
@@ -45,11 +45,7 @@ https://github.com/GrandeAmore01/fan-accounting-miniapp
 - `services/`: 公共服务和业务逻辑
 - `server/`: 后端接口、数据库脚本和服务逻辑
 
-如果必须修改公共文件，先在群里说明：
-
-1. 为什么要改。
-2. 要改哪个文件。
-3. 可能影响哪些页面或同学的任务。
+如果必须修改公共文件，一定要注意沟通和时间安排，避免冲突
 
 ## 组员日常开发流程
 
