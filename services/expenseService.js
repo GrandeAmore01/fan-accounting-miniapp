@@ -230,10 +230,14 @@ function validateExpense(expense) {
 
 function syncStageLight(expense) {
   if (expense.category === 'meet' && expense.stageId) {
-    stageService.lightStage(expense.stageId);
-    if (expense.expenseId) {
-      stageService.linkStageExpense(expense.stageId, expense.expenseId);
-    }
+    stageService.lightStage(expense.stageId).then(() => {
+      if (expense.expenseId) {
+        return stageService.linkStageExpense(expense.stageId, expense.expenseId);
+      }
+      return null;
+    }).catch((error) => {
+      console.warn('同步舞台点亮状态失败', error);
+    });
   }
 }
 
