@@ -53,6 +53,29 @@ function buildHighlightedSegments(text, keyword) {
   return segments.length ? segments : [{ text: source, matched: false }];
 }
 
+function buildCollectionDetailText(item) {
+  return [
+    item.saleType,
+    item.primaryCategory,
+    item.secondaryCategory,
+    item.productStyle,
+    item.seriesName,
+    item.priceNote
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function buildCollectionPriceText(item) {
+  return item.priceText || (
+    item.referencePrice ? `参考价 ¥${item.referencePrice}` : '暂无参考价'
+  );
+}
+
+function getSortDateValue(item) {
+  return new Date(item.date || '1970-01-01').getTime();
+}
+
 function createDefaultFormData() {
   return {
     expenseId: '',
@@ -100,6 +123,13 @@ Page({
     filterCategoryIndex: 0,
     keyword: '',
     showActualAmount: false,
+    sortOptions: [
+      { id: 'date_desc', name: '日期从新到旧' },
+      { id: 'date_asc', name: '日期从旧到新' },
+      { id: 'amount_desc', name: '总价格从高到低' },
+      { id: 'amount_asc', name: '总价格从低到高' }
+    ],
+    sortIndex: 0,
     paymentMethods: ['微信支付', '支付宝', '银行卡', '现金', '其他'],
     purchaseChannels: [
       { id: 'official', name: '官方渠道' },
@@ -122,6 +152,7 @@ Page({
     searchKeyword: '',
     meetSearchKeyword: '',
     collectionSearchKeyword: '',
+    selectedCollectionMeta: '',
     searchResults: [],
     stageDateOptions: [],
     stageDateLabels: [],
@@ -155,7 +186,7 @@ Page({
         category: filterCategory,
         keyword: this.data.keyword
       });
-      const expenses = expenseList.map((item) => ({
+      const expenses = this.sortExpenseList(expenseList).map((item) => ({
         ...item,
         includedAmountText: expenseService.formatMoney(item.includedAmount),
         totalAmountText: expenseService.formatMoney(item.totalAmount),
@@ -187,6 +218,22 @@ Page({
         icon: 'none'
       });
     }
+  },
+
+  sortExpenseList(expenseList) {
+    const sortOption = this.data.sortOptions[this.data.sortIndex] || this.data.sortOptions[0];
+    return [...expenseList].sort((a, b) => {
+      if (sortOption.id === 'date_asc') {
+        return getSortDateValue(a) - getSortDateValue(b);
+      }
+      if (sortOption.id === 'amount_desc') {
+        return Number(b.totalAmount || 0) - Number(a.totalAmount || 0);
+      }
+      if (sortOption.id === 'amount_asc') {
+        return Number(a.totalAmount || 0) - Number(b.totalAmount || 0);
+      }
+      return getSortDateValue(b) - getSortDateValue(a);
+    });
   },
 
   async loadMeetStages() {
@@ -225,6 +272,13 @@ Page({
   handleShowActualAmountChange(event) {
     this.setData({
       showActualAmount: event.detail.value
+    });
+    this.refreshPage();
+  },
+
+  handleSortChange(event) {
+    this.setData({
+      sortIndex: Number(event.detail.value)
     });
     this.refreshPage();
   },
@@ -273,6 +327,7 @@ Page({
       searchKeyword: '',
       meetSearchKeyword: '',
       collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
       searchResults: [],
       stageDateOptions: [],
       stageDateLabels: [],
@@ -329,6 +384,7 @@ Page({
       searchKeyword: '',
       meetSearchKeyword: '',
       collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
       searchResults: [],
       stageDateOptions: [],
       stageDateLabels: [],
@@ -454,6 +510,7 @@ Page({
       searchKeyword: '',
       meetSearchKeyword: '',
       collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
       searchResults: [],
       stageDateOptions: [],
       stageDateLabels: [],
@@ -479,6 +536,7 @@ Page({
       searchKeyword: '',
       meetSearchKeyword: '',
       collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
       searchResults: [],
       stageDateOptions: [],
       stageDateLabels: [],
@@ -532,9 +590,17 @@ Page({
   handleMeetDateChange(event) {
     const date = event.detail.value;
     if (this.data.formData.category === 'meet' && isMeetStageType(this.data.formData.subType)) {
-      const matchedStage = this.data.concertStages.find((item) => item.date === date);
+      const matchedStage =
+        (this.data.meetStages || []).find((item) => (
+          inferMeetStageType(item) === this.data.formData.subType && item.date === date
+        )) ||
+        (this.data.meetStages || []).find((item) => item.date === date);
       if (matchedStage) {
-        this.applySelectedMeetStage(matchedStage);
+        this.applySelectedMeetStage(matchedStage, {
+          stageDateOptions: [],
+          stageDateLabels: [],
+          stageDateIndex: 0
+        });
         return;
       }
 
@@ -550,7 +616,10 @@ Page({
         priceTiers: [],
         priceTierLabels: [],
         priceTierIndex: 0,
-        matchedMeetStageName: ''
+        matchedMeetStageName: '',
+        stageDateOptions: [],
+        stageDateLabels: [],
+        stageDateIndex: 0
       });
       return;
     }
@@ -628,7 +697,7 @@ Page({
     });
   },
 
-  async handleItemSearchInput(event) {
+  handleItemSearchInput(event) {
     const rawValue =
       event &&
       event.detail &&
@@ -637,7 +706,8 @@ Page({
         : '';
     const searchKeyword = rawValue === 'undefined' ? '' : rawValue;
     const category = this.data.formData.category;
-    if (category === 'meet') {
+    const searchType = event.currentTarget.dataset.searchType || category;
+    if (searchType === 'meet') {
       this.setData({
         searchKeyword,
         meetSearchKeyword: searchKeyword
@@ -647,7 +717,7 @@ Page({
         this.setData({
           searchResults: []
         });
-        return;
+        return searchKeyword;
       }
       const stageGroups = [];
       const stageGroupMap = {};
@@ -671,9 +741,9 @@ Page({
       this.setData({
         searchResults: stageGroups.slice(0, 8)
       });
-      return;
+      return searchKeyword;
     }
-    if (category === 'collection') {
+    if (searchType === 'collection') {
       this.setData({
         searchKeyword,
         collectionSearchKeyword: searchKeyword
@@ -682,31 +752,39 @@ Page({
         this.setData({
           searchResults: []
         });
-        return;
+        return searchKeyword;
       }
-      try {
-        const results = await collectionCatalogService.searchCollections(searchKeyword.trim());
-        this.setData({
+      collectionCatalogService.searchCollections(searchKeyword.trim())
+        .then((results) => {
+          if (this.data.collectionSearchKeyword !== searchKeyword) {
+            return;
+          }
+          this.setData({
           searchResults: (results || []).slice(0, 8).map((item) => ({
             ...item,
             type: 'collection',
             highlightSegments: buildHighlightedSegments(item.collectionName, searchKeyword.trim()),
-            displayMeta: item.priceText || (
-              item.referencePrice ? `参考价 ¥${item.referencePrice}` : '暂无参考价'
-            )
+            detailText: buildCollectionDetailText(item),
+            detailSegments: buildHighlightedSegments(buildCollectionDetailText(item), searchKeyword.trim()),
+            priceDisplayText: buildCollectionPriceText(item)
           }))
+          });
+        })
+        .catch((error) => {
+          if (this.data.collectionSearchKeyword !== searchKeyword) {
+            return;
+          }
+          wx.showToast({
+            title: error.message || '搜索藏品失败',
+            icon: 'none'
+          });
         });
-      } catch (error) {
-        wx.showToast({
-          title: error.message || '搜索藏品失败',
-          icon: 'none'
-        });
-      }
-      return;
+      return searchKeyword;
     }
     this.setData({
       searchResults: []
     });
+    return searchKeyword;
   },
 
   handleSelectSearchItem(event) {
@@ -759,6 +837,9 @@ Page({
         'formData.expenseSource': 'collection',
         searchKeyword: item.collectionName || '',
         collectionSearchKeyword: item.collectionName || '',
+        selectedCollectionMeta: [buildCollectionDetailText(item), buildCollectionPriceText(item)]
+          .filter(Boolean)
+          .join(' · '),
         searchResults: [],
         purchaseChannelIndex: referencePrice ? 0 : 1,
         pricingModeIndex

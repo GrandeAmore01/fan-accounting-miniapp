@@ -36,6 +36,9 @@
         <text class="filter-chip-label">筛选</text>
         <text class="filter-chip-value">{{categoryTabs[activeCategoryIndex].name}}</text>
       </view>
+      <picker mode="selector" range="{{sortOptions}}" range-key="name" value="{{sortIndex}}" bindchange="handleSortChange">
+        <view class="sort-picker">{{sortOptions[sortIndex].name}}</view>
+      </picker>
       <view class="extra-switch">
         <text>列表显示实际金额</text>
         <switch checked="{{showActualAmount}}" color="#D6A400" bindchange="handleShowActualAmountChange" />
@@ -167,7 +170,7 @@
         </view>
         <view class="form-field">
           <text class="field-label">{{subTypes[subTypeIndex].name}}名称</text>
-          <input class="form-input" value="{{meetSearchKeyword}}" placeholder="搜索云端演唱会名称" bindinput="handleItemSearchInput" />
+          <input class="form-input" placeholder="搜索云端演唱会名称" confirm-type="search" data-search-type="meet" bindinput="handleItemSearchInput" />
           <view class="search-result" wx:for="{{searchResults}}" wx:key="id" data-id="{{item.id}}" bindtap="handleSelectSearchItem">
             <view>
               <text wx:for="{{item.highlightSegments}}" wx:for-item="segment" wx:key="index" class="{{segment.matched ? 'search-hit' : ''}}">{{segment.text}}</text>
@@ -219,12 +222,18 @@
 
       <view wx:elif="{{formData.category === 'collection'}}" class="form-section">
         <text class="section-title">藏品信息</text>
-        <input class="form-input" value="{{collectionSearchKeyword}}" placeholder="搜索云端藏品名称" bindinput="handleItemSearchInput" />
+        <input class="form-input" placeholder="搜索云端藏品名称" confirm-type="search" data-search-type="collection" bindinput="handleItemSearchInput" />
         <view class="search-result" wx:for="{{searchResults}}" wx:key="collectionId" data-id="{{item.collectionId}}" bindtap="handleSelectSearchItem">
           <view>
             <text wx:for="{{item.highlightSegments}}" wx:for-item="segment" wx:key="index" class="{{segment.matched ? 'search-hit' : ''}}">{{segment.text}}</text>
           </view>
-          <text class="muted">{{item.displayMeta}}</text>
+          <view wx:if="{{item.detailText}}">
+            <text wx:for="{{item.detailSegments}}" wx:for-item="segment" wx:key="index" class="muted {{segment.matched ? 'search-hit' : ''}}">{{segment.text}}</text>
+          </view>
+          <text class="muted">{{item.priceDisplayText}}</text>
+        </view>
+        <view class="matched-stage" wx:if="{{selectedCollectionMeta}}">
+          已选：{{selectedCollectionMeta}}
         </view>
         <view class="form-field">
           <text class="field-label">藏品名称</text>
