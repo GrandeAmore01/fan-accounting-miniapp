@@ -101,7 +101,6 @@
     </view>
     <text class="muted">涉及专辑：{{item.albumNamesText || item.albumNameCn || item.albumName}}</text>
     <text class="muted">歌单预览：{{item.songPreviewText || item.songListText}}</text>
-    <text class="muted" wx:if="{{item.photoCount > 0}}">{{item.photoCountText}}</text>
     <view class="card-actions" catchtap="stopTap">
       <button wx:if="{{item.isLighted}}" class="secondary-button" data-id="{{item.stageId}}" bindtap="handleUnlightStage">取消点亮</button>
       <button wx:else class="primary-button" data-id="{{item.stageId}}" bindtap="handleLightStage">点亮舞台</button>
@@ -150,4 +149,12 @@
       </view>
     </view>
   </view>
+
+  <meet-expense-modal
+    wx:if="{{expenseModalVisible}}"
+    visible="{{expenseModalVisible}}"
+    stage-id="{{expenseModalStageId}}"
+    bind:close="handleCloseExpenseModal"
+    bind:success="handleExpenseModalSuccess"
+  />
 </view>

@@ -5,7 +5,35 @@ const config = require('./config');
 
 const USER_ID = config.userId || 'local-user';
 const STAGE_API_BASE_URL = config.stageApiBaseUrl || config.apiBaseUrl;
-const MAX_PHOTOS = 9;
+const COUNTDOWN_PLACEHOLDER_STAGE_ID = 'stage_countdown_placeholder';
+
+const COUNTDOWN_PLACEHOLDER_STAGE = {
+  stageId: COUNTDOWN_PLACEHOLDER_STAGE_ID,
+  stageName: '下一见面（待定场次）',
+  stageType: 'concert',
+  year: 2026,
+  date: '2026-12-31',
+  city: '待定',
+  venue: '待定场馆',
+  location: '待定',
+  albumId: '',
+  albumName: '未关联专辑',
+  albumNameCn: '未关联专辑',
+  songList: [],
+  songs: [],
+  songCount: 0,
+  songListText: '',
+  songPreviewText: '',
+  priceTiers: [],
+  priceTierText: '待定',
+  cityName: '待定',
+  venueName: '待定场馆',
+  isOnline: false,
+  ticketPrice: 0,
+  description: '用于展示距离下次见面的倒计时',
+  stageTypeName: '演唱会',
+  isCountdownPlaceholder: true
+};
 
 function getStageMeetCategory(stage) {
   const name = `${(stage && stage.stageName) || ''}${(stage && stage.description) || ''}`;
@@ -89,8 +117,7 @@ function setStageNoteState(stageId, note = {}) {
     seat: note.seat || '',
     companions: note.companions || '',
     note: note.note || '',
-    actualTicketPrice: Number(note.actualTicketPrice || 0),
-    photos: Array.isArray(note.photos) ? note.photos.slice(0, MAX_PHOTOS) : []
+    actualTicketPrice: Number(note.actualTicketPrice || 0)
   };
 }
 
@@ -220,6 +247,7 @@ async function loadStageData() {
       const data = await requestStageApi({ url: '/stages' });
       stageCache = (data.stages || []).map((item) => ({ ...item }));
       albumLibrary = data.albums || buildAlbumLibraryFromStages(stageCache);
+      injectCountdownPlaceholderStage();
       pruneOrphanLocalData();
       return stageCache;
     } catch (error) {
@@ -228,8 +256,16 @@ async function loadStageData() {
   }
   stageCache = localStages.map(normalizeLocalStage);
   albumLibrary = buildAlbumLibraryFromStages(stageCache);
+  injectCountdownPlaceholderStage();
   pruneOrphanLocalData();
   return stageCache;
+}
+
+function injectCountdownPlaceholderStage() {
+  if (stageCache.some((item) => item.stageId === COUNTDOWN_PLACEHOLDER_STAGE_ID)) {
+    return;
+  }
+  stageCache.push({ ...COUNTDOWN_PLACEHOLDER_STAGE });
 }
 
 function pruneOrphanLocalData() {
@@ -325,11 +361,11 @@ function persistUserStageStateLocal(stageId, isLighted, options = {}) {
   const userStages = storageService.getCollection(USER_ID, 'userStages');
   const exists = userStages.find((item) => item.stageId === stageId);
   if (exists) {
-    if (!isLighted && options.deleteExpense) {
-      exists.expenseId = '';
-    }
     exists.isLighted = isLighted;
     exists.lightTime = isLighted ? exists.lightTime || new Date().toISOString() : '';
+    if (!isLighted) {
+      exists.expenseId = '';
+    }
   } else {
     userStages.push({
       userId: USER_ID,
@@ -362,6 +398,34 @@ function persistStageNoteLocal(stageId, nextNote) {
   setStageNoteState(stageId, nextNote);
 }
 
+async function clearStageNote(stageId) {
+  delete noteByStageId[stageId];
+  const notes = storageService.getCollection(USER_ID, 'stageNotes');
+  const filtered = notes.filter((item) => item.stageId !== stageId);
+  if (filtered.length !== notes.length) {
+    saveStageNotes(filtered);
+  }
+  if (!config.useStageBackend) {
+    return;
+  }
+  try {
+    await requestStageApi({
+      url: `/stage-notes/${stageId}`,
+      method: 'PUT',
+      data: {
+        userId: USER_ID,
+        seat: '',
+        companions: '',
+        note: '',
+        actualTicketPrice: 0,
+        photos: []
+      }
+    });
+  } catch (error) {
+    console.warn('清空观演备注失败', error);
+  }
+}
+
 function getStageNote(stageId) {
   const note = noteByStageId[stageId] || getStageNotes().find((item) => item.stageId === stageId);
   const userState = getUserStageState(stageId);
@@ -378,8 +442,7 @@ function getStageNote(stageId) {
     seat: '',
     companions: '',
     note: '',
-    actualTicketPrice: userState ? Number(userState.actualTicketPrice || 0) : 0,
-    photos: []
+    actualTicketPrice: userState ? Number(userState.actualTicketPrice || 0) : 0
   };
 }
 
@@ -394,7 +457,7 @@ async function saveStageNote(stageId, payload = {}) {
     companions: payload.companions || '',
     note: payload.note || '',
     actualTicketPrice: priceResult.value,
-    photos: Array.isArray(payload.photos) ? payload.photos.slice(0, MAX_PHOTOS) : []
+    photos: []
   };
 
   if (config.useStageBackend) {
@@ -423,20 +486,6 @@ async function saveStageNote(stageId, payload = {}) {
 
   persistStageNoteLocal(stageId, nextNote);
   return { valid: true, data: nextNote };
-}
-
-async function addStagePhotos(stageId, photoPaths = []) {
-  const note = getStageNote(stageId);
-  const merged = [...(note.photos || []), ...photoPaths].slice(0, MAX_PHOTOS);
-  return saveStageNote(stageId, { ...note, photos: merged });
-}
-
-async function removeStagePhoto(stageId, photoPath) {
-  const note = getStageNote(stageId);
-  return saveStageNote(stageId, {
-    ...note,
-    photos: (note.photos || []).filter((item) => item !== photoPath)
-  });
 }
 
 function getValidPriceTiers(stageOrTiers) {
@@ -475,6 +524,23 @@ function getStageAlbumNames(stage) {
     return [stage.albumName];
   }
   return [];
+}
+
+function formatAlbumNamesText(stage, albumNames = []) {
+  const uniqueNames = Array.from(new Set(albumNames.filter(Boolean)));
+  if (!uniqueNames.length) {
+    return '未关联专辑';
+  }
+  const songAlbumIds = new Set(
+    (stage.songs || []).map((song) => song.albumId).filter(Boolean)
+  );
+  if (uniqueNames.length >= 3) {
+    return `${uniqueNames.slice(0, 3).join('、')}等`;
+  }
+  if (songAlbumIds.size > uniqueNames.length) {
+    return `${uniqueNames.join('、')}等`;
+  }
+  return uniqueNames.join('、');
 }
 
 const MAX_ACTION_SHEET_ITEMS = 6;
@@ -555,22 +621,18 @@ function getStatsYearOptions() {
 
 function enrichStage(item) {
   const userState = getUserStageState(item.stageId);
-  const note = getStageNote(item.stageId);
-  const photos = note.photos || [];
   const albumNames = getStageAlbumNames(item);
   const validPriceTiers = getValidPriceTiers(item);
   return {
     ...item,
     albumNames,
-    albumNamesText: albumNames.length > 0 ? albumNames.join('、') : '未关联专辑',
+    albumNamesText: formatAlbumNamesText(item, albumNames),
     priceTiers: validPriceTiers.length > 0 ? validPriceTiers : item.priceTiers || [],
     priceTierText: formatPriceTierText(item.priceTiers),
     ticketPrice: validPriceTiers[0] || Number(item.ticketPrice || 0),
     isLighted: Boolean(userState && userState.isLighted),
     lightTime: userState ? userState.lightTime : '',
     expenseId: userState ? userState.expenseId : '',
-    photoCount: photos.length,
-    photoCountText: photos.length > 0 ? `回忆照片：${photos.length} 张` : '',
     songPreviewText: item.songPreviewText || (item.songList || []).slice(0, 3).join('、')
   };
 }
@@ -684,18 +746,23 @@ function getMeetTimeline() {
   const today = new Date();
   const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const meetStages = listStages()
-    .filter((item) => item.isLighted)
+    .filter((item) => item.isLighted && !item.isCountdownPlaceholder)
     .filter((item) => parseDateValue(item.date))
     .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
 
+  const futureCandidates = listStages()
+    .filter((item) => parseDateValue(item.date))
+    .filter((item) => parseDateValue(item.date).getTime() > todayDate.getTime())
+    .filter((item) => item.isLighted || item.isCountdownPlaceholder)
+    .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
+
   const pastStages = meetStages.filter((item) => parseDateValue(item.date).getTime() <= todayDate.getTime());
-  const futureStages = meetStages.filter((item) => parseDateValue(item.date).getTime() > todayDate.getTime());
   const lastMeet = pastStages[pastStages.length - 1];
-  const nextMeet = futureStages[0];
+  const nextMeet = futureCandidates[0];
   const firstMeet = meetStages[0];
 
   return {
-    hasMeetStages: meetStages.length > 0,
+    hasMeetStages: meetStages.length > 0 || Boolean(nextMeet),
     lastMeet: buildMeetItem(lastMeet, lastMeet ? diffDays(parseDateValue(lastMeet.date), todayDate) : 0),
     nextMeet: buildMeetItem(nextMeet, nextMeet ? diffDays(todayDate, parseDateValue(nextMeet.date)) : 0),
     firstMeetDateText: firstMeet ? formatDisplayDate(firstMeet.date) : '暂无记录'
@@ -799,10 +866,33 @@ function getYearStats(year, meetCategory = 'all') {
   };
 }
 
-function getStageStats() {
-  const list = listStages();
+function listCountableStages() {
+  return listStages().filter((item) => !item.isCountdownPlaceholder);
+}
+
+function getMeetCategoryCounts() {
+  const list = listCountableStages();
+  return {
+    concert: list.filter((item) => matchesMeetCategory(item, 'concert')).length,
+    special: list.filter((item) => matchesMeetCategory(item, 'special')).length
+  };
+}
+
+function getMeetCategoryOptions() {
+  const counts = getMeetCategoryCounts();
+  return [
+    { id: 'concert', name: `演唱会（${counts.concert}）` },
+    { id: 'special', name: `运动会/新年音乐会（${counts.special}）` }
+  ];
+}
+
+function getStageStats(meetCategory = 'all') {
+  const list =
+    meetCategory && meetCategory !== 'all'
+      ? listCountableStages().filter((item) => matchesMeetCategory(item, meetCategory))
+      : listCountableStages();
   const lightedStages = list.filter((item) => item.isLighted);
-  const songStats = getSongStats();
+  const songStats = getSongStats(lightedStages);
   const progressPercent = list.length > 0 ? Math.round((lightedStages.length / list.length) * 100) : 0;
   return {
     total: list.length,
@@ -813,6 +903,9 @@ function getStageStats() {
 }
 
 function getLinkedExpense(stage) {
+  if (!stage || !stage.isLighted) {
+    return null;
+  }
   const expenses = getExpenseList();
   if (stage.expenseId) {
     const linked = expenses.find((item) => item.expenseId === stage.expenseId);
@@ -828,8 +921,12 @@ function hasStageLinkedExpense(stageOrId) {
   if (!stageId) {
     return false;
   }
-  const stage = listStages().find((item) => item.stageId === stageId);
-  return Boolean(stage && getLinkedExpense(stage));
+  const userState = getUserStageState(stageId);
+  if (!userState || !userState.expenseId) {
+    return false;
+  }
+  const expenses = getExpenseList();
+  return expenses.some((item) => item.expenseId === userState.expenseId);
 }
 
 async function linkStageExpense(stageId, expenseId, actualTicketPrice = 0) {
@@ -930,10 +1027,14 @@ function getStageDetail(stageId) {
   }
   const note = getStageNote(stageId);
   const expense = getLinkedExpense(stage);
-  const displaySeat = note.seat || (expense ? expense.seat : '');
+  const expenseSeat = expense ? expense.seat || '' : '';
+  const displaySeat = note.seat || expenseSeat;
   return {
     ...stage,
-    note,
+    note: {
+      ...note,
+      seat: displaySeat
+    },
     expense,
     displaySeat,
     expenseSummary: expense
@@ -1084,32 +1185,6 @@ function getSongCollectionStats() {
   };
 }
 
-function getPhotoWall() {
-  const validStageIds = new Set(stageCache.map((item) => item.stageId));
-  const groups = getStageNotes()
-    .filter((item) => validStageIds.has(item.stageId))
-    .filter((item) => (item.photos || []).length > 0)
-    .map((note) => {
-      const stage = listStages().find((item) => item.stageId === note.stageId);
-      if (!stage) {
-        return null;
-      }
-      return {
-        stageId: note.stageId,
-        stageName: stage.stageName,
-        date: stage.date,
-        city: stage.cityName,
-        photos: note.photos || []
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  return {
-    hasPhotos: groups.length > 0,
-    groups
-  };
-}
-
 function splitCompanions(text) {
   return (text || '')
     .split(/[,，、;；\n]/)
@@ -1151,7 +1226,10 @@ function getCompanionProfiles() {
       ...profileMap[key],
       stages: profileMap[key].stages.sort((a, b) => b.date.localeCompare(a.date))
     }))
-  );
+  ).map((item, index) => ({
+    ...item,
+    rank: index + 1
+  }));
 }
 
 function setStageLighted(stageId, isLighted, options = {}) {
@@ -1182,7 +1260,7 @@ async function setStageLightedAsync(stageId, isLighted, options = {}) {
         data: {
           userId: USER_ID,
           stageId,
-          clearExpense: options.deleteExpense !== false
+          clearExpense: true
         }
       });
       const previous = getUserStageState(stageId) || { stageId };
@@ -1198,6 +1276,10 @@ async function setStageLightedAsync(stageId, isLighted, options = {}) {
     }
   } else {
     persistUserStageStateLocal(stageId, isLighted, options);
+  }
+
+  if (!isLighted) {
+    await clearStageNote(stageId);
   }
 
   return {
@@ -1265,7 +1347,7 @@ function getStageDashboard(filter = {}) {
   return {
     meetTimeline: getMeetTimeline(),
     stages: filterStages(filter),
-    stats: getStageStats(),
+    stats: getStageStats(filter.stageType || 'all'),
     songStats: getSongStats(),
     albumProgress: getAlbumSongProgress(),
     songSearchResults,
@@ -1278,6 +1360,8 @@ module.exports = {
   ensureStagesLoaded,
   getYearOptions,
   getStatsYearOptions,
+  getMeetCategoryOptions,
+  getMeetCategoryCounts,
   listStages,
   filterStages,
   searchSongs,
@@ -1292,7 +1376,6 @@ module.exports = {
   getAnnualMemoryReport,
   getMeetCalendar,
   getSongCollectionStats,
-  getPhotoWall,
   getCompanionProfiles,
   getSongStats,
   getAlbumSongProgress,
@@ -1300,10 +1383,9 @@ module.exports = {
   getStageStats,
   getStageDashboard,
   getStageDetail,
+  getStageById,
   getStageNote,
   saveStageNote,
-  addStagePhotos,
-  removeStagePhoto,
   getValidPriceTiers,
   promptPriceTier,
   getAllAlbumNames,
@@ -1312,6 +1394,5 @@ module.exports = {
   getLinkedExpense,
   linkStageExpense,
   clearStageExpenseLink,
-  confirmUnlightStage,
-  MAX_PHOTOS
+  confirmUnlightStage
 };

@@ -10,11 +10,33 @@ Page({
     activeTypeIndex: 0,
     yearOptions: [],
     yearIndex: 0,
-    report: {},
-    annualReport: {},
+    report: {
+      hasRecords: false,
+      typeName: '',
+      meetCount: 0,
+      topCity: { name: '暂无记录', count: 0 },
+      cityRanking: []
+    },
+    annualReport: {
+      hasRecords: false,
+      year: '',
+      meetCount: 0,
+      unlockedSongCount: 0,
+      cityCount: 0,
+      stageSpending: '0.00',
+      expenseCount: 0,
+      songAppearCount: 0,
+      topCity: { name: '暂无记录', count: 0 },
+      topSongs: []
+    },
     calendar: [],
-    songCollection: {},
-    photoWall: { hasPhotos: false, groups: [] },
+    songCollection: {
+      heardCount: 0,
+      libraryCount: 0,
+      isComplete: false,
+      topHeardSongs: [],
+      unheardSongs: []
+    },
     companions: [],
     activeCompanion: null
   },
@@ -53,7 +75,6 @@ Page({
       annualReport: stageService.getAnnualMemoryReport(year, type),
       calendar: stageService.getMeetCalendar(year, type),
       songCollection: stageService.getSongCollectionStats(),
-      photoWall: stageService.getPhotoWall(),
       companions: stageService.getCompanionProfiles(),
       activeCompanion: null
     });
@@ -72,16 +93,6 @@ Page({
   handleOpenDetail(event) {
     const { id } = event.currentTarget.dataset;
     wx.navigateTo({ url: `/pages/stage-detail/index?id=${id}` });
-  },
-
-  handlePreviewPhoto(event) {
-    const { groupIndex, photoIndex } = event.currentTarget.dataset;
-    const group = this.data.photoWall.groups[groupIndex];
-    if (!group) return;
-    wx.previewImage({
-      current: group.photos[photoIndex],
-      urls: group.photos
-    });
   },
 
   handleCompanionTap(event) {

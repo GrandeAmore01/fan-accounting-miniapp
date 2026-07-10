@@ -12,7 +12,8 @@ Page({
       companions: '',
       actualTicketPrice: '',
       note: ''
-    }
+    },
+    expenseModalVisible: false
   },
 
   onLoad(options) {
@@ -77,11 +78,8 @@ Page({
   },
 
   async handleSaveNote() {
-    const { noteForm, stageId, detail } = this.data;
-    const result = await stageService.saveStageNote(stageId, {
-      ...noteForm,
-      photos: detail.note.photos || []
-    });
+    const { noteForm, stageId } = this.data;
+    const result = await stageService.saveStageNote(stageId, noteForm);
     if (!result.valid) {
       wx.showToast({ title: result.message, icon: 'none' });
       return;
@@ -89,51 +87,6 @@ Page({
     wx.showToast({ title: '已保存', icon: 'success' });
     this.setData({ editingNote: false });
     this.loadDetail();
-  },
-
-  handleChoosePhotos() {
-    const currentCount = (this.data.detail.note.photos || []).length;
-    const remain = stageService.MAX_PHOTOS - currentCount;
-    if (remain <= 0) {
-      wx.showToast({ title: '最多上传9张', icon: 'none' });
-      return;
-    }
-    wx.chooseMedia({
-      count: remain,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      success: async (res) => {
-        const paths = (res.tempFiles || []).map((item) => item.tempFilePath);
-        await stageService.addStagePhotos(this.data.stageId, paths);
-        wx.showToast({ title: '已添加', icon: 'success' });
-        this.loadDetail();
-      }
-    });
-  },
-
-  handlePreviewPhoto(event) {
-    const { url } = event.currentTarget.dataset;
-    const photos = this.data.detail.note.photos || [];
-    wx.previewImage({
-      current: url,
-      urls: photos
-    });
-  },
-
-  handleRemovePhoto(event) {
-    const { url } = event.currentTarget.dataset;
-    wx.showModal({
-      title: '删除照片',
-      content: '确定删除这张照片吗？',
-      success: async (res) => {
-        if (!res.confirm) {
-          return;
-        }
-        await stageService.removeStagePhoto(this.data.stageId, url);
-        wx.showToast({ title: '已删除', icon: 'success' });
-        this.loadDetail();
-      }
-    });
   },
 
   async handleLightStage() {
@@ -150,9 +103,9 @@ Page({
     }
     wx.showModal({
       title: '同步消费记录',
-      content: '已点亮该场次，是否按票档同步生成一条消费记录？',
+      content: '已点亮该场次，是否新增见面消费记录？',
       cancelText: '仅点亮',
-      confirmText: '生成记录',
+      confirmText: '去新增',
       confirmColor: '#c84d69',
       success: (res) => {
         if (!res.confirm) {
@@ -160,28 +113,20 @@ Page({
           this.loadDetail();
           return;
         }
-        setTimeout(() => {
-          this.createExpense(stage);
-        }, 350);
+        this.setData({ expenseModalVisible: true });
       }
     });
   },
 
-  createExpense(stage) {
-    stageService.promptPriceTier(stage, {
-      onSelect: async (priceTier) => {
-        const result = await stageService.createExpenseFromStage(stage.stageId, priceTier);
-        wx.showToast({
-          title: result.valid ? '已生成记录' : result.message,
-          icon: result.valid ? 'success' : 'none'
-        });
-        this.loadDetail();
-      },
-      onCancel: () => {
-        wx.showToast({ title: '已点亮', icon: 'success' });
-        this.loadDetail();
-      }
-    });
+  handleCloseExpenseModal() {
+    this.setData({ expenseModalVisible: false });
+    this.loadDetail();
+  },
+
+  handleExpenseModalSuccess() {
+    this.setData({ expenseModalVisible: false });
+    wx.showToast({ title: '已生成记录', icon: 'success' });
+    this.loadDetail();
   },
 
   handleUnlightStage() {

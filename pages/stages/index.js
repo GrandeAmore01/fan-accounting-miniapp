@@ -44,7 +44,9 @@ Page({
       songAppearCount: 0,
       topSongs: [],
       stages: []
-    }
+    },
+    expenseModalVisible: false,
+    expenseModalStageId: ''
   },
 
   onShow() {
@@ -66,15 +68,20 @@ Page({
   refreshPage() {
     const statsYearOptions = stageService.getStatsYearOptions();
     const yearOptions = stageService.getYearOptions();
+    const stageTypeOptions = stageService.getMeetCategoryOptions();
     const statsYearIndex = Math.min(this.data.statsYearIndex, Math.max(statsYearOptions.length - 1, 0));
+    const stageTypeIndex = Math.min(this.data.stageTypeIndex, Math.max(stageTypeOptions.length - 1, 0));
+    const activeStageType = stageTypeOptions[stageTypeIndex].id;
     const dashboard = stageService.getStageDashboard({
-      stageType: this.data.stageTypeOptions[this.data.stageTypeIndex].id,
+      stageType: activeStageType,
       year: yearOptions[this.data.yearIndex] ? yearOptions[this.data.yearIndex].id : 'all',
       lightStatus: this.data.statusOptions[this.data.statusIndex].id,
       keyword: this.data.keyword,
       statsYear: statsYearOptions[statsYearIndex] ? statsYearOptions[statsYearIndex].id : ''
     });
     this.setData({
+      stageTypeOptions,
+      stageTypeIndex,
       yearOptions,
       statsYearOptions,
       statsYearIndex,
@@ -162,9 +169,9 @@ Page({
     }
     wx.showModal({
       title: '同步消费记录',
-      content: '已点亮该场次，是否按票档同步生成一条消费记录？',
+      content: '已点亮该场次，是否新增见面消费记录？',
       cancelText: '仅点亮',
-      confirmText: '生成记录',
+      confirmText: '去新增',
       confirmColor: '#c84d69',
       success: (res) => {
         if (!res.confirm) {
@@ -172,11 +179,28 @@ Page({
           this.refreshPage();
           return;
         }
-        setTimeout(() => {
-          this.handleCreateExpenseFromStage(stage);
-        }, 350);
+        this.setData({
+          expenseModalVisible: true,
+          expenseModalStageId: id
+        });
       }
     });
+  },
+
+  handleCloseExpenseModal() {
+    this.setData({
+      expenseModalVisible: false,
+      expenseModalStageId: ''
+    });
+    this.refreshPage();
+  },
+
+  handleExpenseModalSuccess() {
+    this.setData({
+      expenseModalVisible: false,
+      expenseModalStageId: ''
+    });
+    this.refreshPage();
   },
 
   handleCreateExpenseFromStage(stage) {
@@ -185,24 +209,9 @@ Page({
       this.refreshPage();
       return;
     }
-    stageService.promptPriceTier(stage, {
-      onSelect: (priceTier) => {
-        this.createExpenseFromStage(stage.stageId, priceTier);
-      },
-      onCancel: () => {
-        wx.showToast({ title: '已点亮', icon: 'success' });
-        this.refreshPage();
-      }
-    });
-  },
-
-  createExpenseFromStage(stageId, priceTier) {
-    stageService.createExpenseFromStage(stageId, priceTier).then((expenseResult) => {
-      wx.showToast({
-        title: expenseResult.valid ? '已生成记录' : expenseResult.message,
-        icon: expenseResult.valid ? 'success' : 'none'
-      });
-      this.refreshPage();
+    this.setData({
+      expenseModalVisible: true,
+      expenseModalStageId: stage.stageId
     });
   },
 
