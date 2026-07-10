@@ -11,9 +11,8 @@ const expenseTypes = [
     name: '见面',
     subTypes: [
       { id: 'concert', name: '演唱会' },
-      { id: 'festival', name: '音乐节|拼盘' },
-      { id: 'activity', name: '活动|综艺|盛典' },
-      { id: 'other_meet', name: '其他见面' }
+      { id: 'new_year_concert', name: '新年音乐会' },
+      { id: 'sports_day', name: '运动会' }
     ]
   },
   {
@@ -44,14 +43,7 @@ const expenseTypes = [
 ];
 const searchableItems = [];
 const expenseCategories = expenseTypes;
-const feeLabels = {
-  premium: '加价',
-  travel: '路费',
-  hotel: '住宿',
-  rental: '设备',
-  other: '其他',
-  shipping: '邮费'
-};
+const feeLabels = {};
 
 function getMainType(mainTypeId) {
   return expenseTypes.find((item) => item.id === mainTypeId);
@@ -84,26 +76,17 @@ function formatMoney(value) {
 
 function normalizeFees(fees = {}) {
   return {
-    premium: toNumber(fees.premium),
-    travel: toNumber(fees.travel),
-    hotel: toNumber(fees.hotel),
-    rental: toNumber(fees.rental),
-    other: toNumber(fees.other),
-    shipping: toNumber(fees.shipping)
+    premium: 0,
+    travel: 0,
+    hotel: 0,
+    rental: 0,
+    other: 0,
+    shipping: 0
   };
 }
 
 function calculateTotalAmount(expense) {
-  const fees = normalizeFees(expense.fees);
-  return (
-    calculateBaseAmount(expense) +
-    fees.premium +
-    fees.travel +
-    fees.hotel +
-    fees.rental +
-    fees.other +
-    fees.shipping
-  );
+  return calculateBaseAmount(expense);
 }
 
 function calculateBaseAmount(expense) {
@@ -134,9 +117,6 @@ function calculateIncludedAmount(expense) {
   if (!shouldIncludeExpense(expense)) {
     return 0;
   }
-  if (isConcertExpense(expense) && expense.outfieldOnly) {
-    return calculateBaseAmount(expense);
-  }
   return calculateTotalAmount(expense);
 }
 
@@ -153,11 +133,10 @@ function getFeeTags(fees = {}) {
 }
 
 function enrichExpense(item) {
-  const outfieldOnly = Boolean(item.outfieldOnly);
   const nextItem = {
     ...item,
-    outfieldOnly,
-    includeInTotal: isConcertExpense(item) ? item.includeInTotal !== false : outfieldOnly ? false : item.includeInTotal !== false,
+    outfieldOnly: false,
+    includeInTotal: item.includeInTotal !== false,
     images: [],
     fees: normalizeFees(item.fees)
   };
@@ -176,8 +155,6 @@ function listExpenses() {
 }
 
 function normalizeExpense(expense) {
-  const outfieldOnly = Boolean(expense.outfieldOnly);
-  const isConcert = expense.category === 'meet' && expense.subType === 'concert';
   return {
     expenseId: expense.expenseId || `expense_${Date.now()}`,
     category: expense.category || 'meet',
@@ -192,8 +169,8 @@ function normalizeExpense(expense) {
     remark: (expense.remark || '').trim(),
     images: [],
     fees: normalizeFees(expense.fees),
-    outfieldOnly,
-    includeInTotal: isConcert ? expense.includeInTotal !== false : outfieldOnly ? false : expense.includeInTotal !== false,
+    outfieldOnly: false,
+    includeInTotal: expense.includeInTotal !== false,
     collectionId: expense.collectionId || '',
     stageId: expense.stageId || '',
     stageDate: expense.stageDate || '',
@@ -221,6 +198,9 @@ function validateExpense(expense) {
   }
   if (!nextExpense.date) {
     return { valid: false, message: '请选择消费日期' };
+  }
+  if (nextExpense.category === 'meet' && !nextExpense.stageDate) {
+    return { valid: false, message: '请选择见面日期' };
   }
   if (!nextExpense.amount || nextExpense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };
@@ -376,6 +356,22 @@ async function listExpensesAsync() {
   return (data || []).map(enrichExpense);
 }
 
+async function listMeetStagesAsync() {
+  if (config.useBackend) {
+    try {
+      const data = await apiService.request({
+        baseUrl: EXPENSE_API_BASE_URL,
+        url: '/expenses/meet-stages'
+      });
+      return data || [];
+    } catch (error) {
+      console.warn('消费模块见面场次加载失败，回退舞台缓存', error);
+    }
+  }
+  await stageService.ensureStagesLoaded();
+  return stageService.listStages();
+}
+
 async function filterExpensesAsync(filter) {
   const expenses = await listExpensesAsync();
   return filterExpenseList(expenses, filter);
@@ -470,6 +466,7 @@ module.exports = {
   listExpenses,
   filterExpenses,
   listExpensesAsync,
+  listMeetStagesAsync,
   filterExpensesAsync,
   addExpense,
   addExpenseAsync,

@@ -13,6 +13,77 @@ function getUserId(req) {
   return req.query.userId || (req.body && req.body.userId) || 'local-user';
 }
 
+function formatDate(value) {
+  if (!value) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.slice(0, 10);
+  }
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function inferStageType(row) {
+  const name = row.stage_name || '';
+  if (name.includes('新年音乐会')) {
+    return 'new_year_concert';
+  }
+  if (name.includes('运动会')) {
+    return 'sports_day';
+  }
+  return row.stage_type || 'concert';
+}
+
+router.get('/meet-stages', async (req, res, next) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT
+         s.stage_id,
+         s.stage_name,
+         s.stage_type,
+         s.stage_date,
+         s.city,
+         s.venue,
+         s.location,
+         p.price_tier,
+         p.sort_order
+       FROM stages s
+       LEFT JOIN stage_ticket_prices p ON p.stage_id = s.stage_id
+       ORDER BY s.stage_date ASC, s.stage_id ASC, p.sort_order ASC`
+    );
+
+    const stageMap = {};
+    rows.forEach((row) => {
+      if (!stageMap[row.stage_id]) {
+        stageMap[row.stage_id] = {
+          stageId: row.stage_id,
+          stageName: row.stage_name || '',
+          stageType: inferStageType(row),
+          date: formatDate(row.stage_date),
+          city: row.city || '',
+          venue: row.venue || '',
+          location: row.venue || row.location || '',
+          priceTiers: []
+        };
+      }
+      const priceTier = Number(row.price_tier);
+      if (Number.isFinite(priceTier) && priceTier > 0) {
+        stageMap[row.stage_id].priceTiers.push(priceTier);
+      }
+    });
+
+    res.json({
+      ok: true,
+      data: Object.keys(stageMap).map((stageId) => stageMap[stageId])
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/', async (req, res, next) => {
   try {
     const userId = getUserId(req);

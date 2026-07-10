@@ -189,6 +189,11 @@
   border-bottom: 0;
 }
 
+.search-hit {
+  color: #d12b2b;
+  font-weight: 800;
+}
+
 .image-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
