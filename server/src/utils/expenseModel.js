@@ -13,7 +13,7 @@ function toNumber(value) {
 
 function normalizeFees(fees = {}) {
   return feeKeys.reduce((result, key) => {
-    result[key] = toNumber(fees[key]);
+    result[key] = 0;
     return result;
   }, {});
 }
@@ -39,16 +39,7 @@ function calculateBaseAmount(expense) {
 }
 
 function calculateTotalAmount(expense) {
-  const fees = normalizeFees(expense.fees);
-  return (
-    calculateBaseAmount(expense) +
-    fees.premium +
-    fees.travel +
-    fees.hotel +
-    fees.rental +
-    fees.other +
-    fees.shipping
-  );
+  return calculateBaseAmount(expense);
 }
 
 function isConcertExpense(expense) {
@@ -59,9 +50,6 @@ function calculateIncludedAmount(expense) {
   if (expense.includeInTotal === false) {
     return 0;
   }
-  if (isConcertExpense(expense) && expense.outfieldOnly) {
-    return calculateBaseAmount(expense);
-  }
   return calculateTotalAmount(expense);
 }
 
@@ -70,7 +58,6 @@ function createExpenseId() {
 }
 
 function normalizeExpense(input = {}, expenseId) {
-  const outfieldOnly = Boolean(input.outfieldOnly);
   const base = {
     expenseId: expenseId || input.expenseId || createExpenseId(),
     userId: input.userId || 'local-user',
@@ -88,13 +75,8 @@ function normalizeExpense(input = {}, expenseId) {
     remark: String(input.remark || '').trim(),
     images: normalizeImages(input.images),
     fees: normalizeFees(input.fees),
-    outfieldOnly,
-    includeInTotal:
-      input.category === 'meet' && input.subType === 'concert'
-        ? input.includeInTotal !== false
-        : outfieldOnly
-          ? false
-          : input.includeInTotal !== false,
+    outfieldOnly: false,
+    includeInTotal: input.includeInTotal !== false,
     collectionId: input.collectionId || '',
     stageId: input.stageId || '',
     stageDate: input.stageDate || '',
@@ -130,6 +112,9 @@ function validateExpense(expense) {
   }
   if (!expense.date) {
     return { valid: false, message: '请选择消费日期' };
+  }
+  if (expense.category === 'meet' && !expense.stageDate) {
+    return { valid: false, message: '请选择见面日期' };
   }
   if (!expense.amount || expense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };

@@ -1,7 +1,57 @@
 const expenseService = require('../../services/expenseService');
 const budgetService = require('../../services/budgetService');
-const stageService = require('../../services/stageService');
 const collectionCatalogService = require('../../services/collectionCatalogService');
+
+function inferMeetStageType(stage) {
+  const name = `${stage.stageName || ''}${stage.name || ''}`;
+  if (name.indexOf('新年音乐会') >= 0) {
+    return 'new_year_concert';
+  }
+  if (name.indexOf('运动会') >= 0) {
+    return 'sports_day';
+  }
+  return stage.stageType || 'concert';
+}
+
+function isMeetStageType(subType) {
+  return ['concert', 'new_year_concert', 'sports_day'].includes(subType);
+}
+
+function getMeetStageLabel(subType) {
+  const match = expenseService.getSubType('meet', subType);
+  return match ? match.name : '见面';
+}
+
+function getPositivePriceTiers(stage) {
+  return (stage.priceTiers || [])
+    .map((price) => Number(price))
+    .filter((price) => Number.isFinite(price) && price > 0);
+}
+
+function buildHighlightedSegments(text, keyword) {
+  const source = String(text || '');
+  const target = String(keyword || '').trim();
+  if (!source || !target) {
+    return [{ text: source, matched: false }];
+  }
+  const lowerSource = source.toLowerCase();
+  const lowerTarget = target.toLowerCase();
+  const segments = [];
+  let cursor = 0;
+  let index = lowerSource.indexOf(lowerTarget);
+  while (index >= 0) {
+    if (index > cursor) {
+      segments.push({ text: source.slice(cursor, index), matched: false });
+    }
+    segments.push({ text: source.slice(index, index + target.length), matched: true });
+    cursor = index + target.length;
+    index = lowerSource.indexOf(lowerTarget, cursor);
+  }
+  if (cursor < source.length) {
+    segments.push({ text: source.slice(cursor), matched: false });
+  }
+  return segments.length ? segments : [{ text: source, matched: false }];
+}
 
 function createDefaultFormData() {
   return {
@@ -31,7 +81,7 @@ function createDefaultFormData() {
     stageId: '',
     stageDate: '',
     priceTier: '',
-    purchaseChannel: 'none',
+    purchaseChannel: 'official',
     pricingMode: 'direct',
     referencePrice: '',
     unitPrice: '',
@@ -52,26 +102,30 @@ Page({
     showActualAmount: false,
     paymentMethods: ['微信支付', '支付宝', '银行卡', '现金', '其他'],
     purchaseChannels: [
-      { id: 'none', name: '未选择' },
       { id: 'official', name: '官方渠道' },
       { id: 'other', name: '其他渠道' }
     ],
     pricingModes: [
       { id: 'direct', name: '直接填写总金额' },
-      { id: 'official_unit', name: '官方单价 × 数量' },
-      { id: 'unit', name: '实际单价 × 数量' },
+      { id: 'official_unit', name: '官方金额档位' },
       { id: 'total', name: '按总价记录' }
     ],
     purchaseChannelIndex: 0,
     pricingModeIndex: 0,
     concertStages: [],
+    meetStages: [],
     concertStageIndex: 0,
     priceTiers: [],
     priceTierLabels: [],
     priceTierIndex: 0,
     matchedMeetStageName: '',
     searchKeyword: '',
+    meetSearchKeyword: '',
+    collectionSearchKeyword: '',
     searchResults: [],
+    stageDateOptions: [],
+    stageDateLabels: [],
+    stageDateIndex: 0,
     formVisible: false,
     formMode: 'create',
     formTitle: '新增消费记录',
@@ -96,6 +150,7 @@ Page({
   async refreshPage() {
     const filterCategory = this.data.categoryTabs[this.data.activeCategoryIndex].id;
     try {
+      await this.loadMeetStages();
       const expenseList = await expenseService.filterExpensesAsync({
         category: filterCategory,
         keyword: this.data.keyword
@@ -132,6 +187,14 @@ Page({
         icon: 'none'
       });
     }
+  },
+
+  async loadMeetStages() {
+    const meetStages = await expenseService.listMeetStagesAsync();
+    this.setData({
+      meetStages
+    });
+    return meetStages;
   },
 
   handleKeywordInput(event) {
@@ -175,7 +238,8 @@ Page({
     this.refreshPage();
   },
 
-  handleOpenCreate() {
+  async handleOpenCreate() {
+    await this.loadMeetStages();
     const activeCategoryId = this.data.categoryTabs[this.data.activeCategoryIndex].id;
     const categoryIndex =
       activeCategoryId === 'all'
@@ -192,6 +256,8 @@ Page({
       stageId: '',
       stageDate: '',
       priceTier: '',
+      purchaseChannel: ['meet', 'collection'].includes(category.id) ? 'official' : 'none',
+      pricingMode: ['meet', 'collection'].includes(category.id) ? 'official_unit' : 'direct',
       date: this.getToday()
     };
     this.applyFormState({
@@ -205,11 +271,17 @@ Page({
       purchaseChannelIndex: 0,
       pricingModeIndex: 0,
       searchKeyword: '',
-      searchResults: []
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
-  handleOpenEdit(event) {
+  async handleOpenEdit(event) {
+    await this.loadMeetStages();
     const expenseId = event.currentTarget.dataset.id;
     const expense = this.data.expenses.find((item) => item.expenseId === expenseId);
     if (!expense) {
@@ -255,7 +327,12 @@ Page({
       purchaseChannelIndex,
       pricingModeIndex,
       searchKeyword: '',
-      searchResults: []
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
@@ -273,24 +350,28 @@ Page({
         ? nextState.subTypeIndex
         : subTypes.findIndex((item) => item.id === formData.subType);
     const safeSubTypeIndex = Math.max(subTypeIndex, 0);
-    const concertStages = stageService.listStages().filter((item) => item.stageType === 'concert' || item.stageType === 'festival');
+    const isMeetStage = formData.category === 'meet' && isMeetStageType(formData.subType);
+    const concertStages = (this.data.meetStages || []).filter((item) => (
+      inferMeetStageType(item) === formData.subType
+    ));
     const isDateMatchedMeet =
-      formData.category === 'meet' && (formData.subType === 'concert' || formData.subType === 'festival');
+      isMeetStage && Boolean(formData.stageDate);
     const matchedStage =
       isDateMatchedMeet
-        ? stageService.findStageByDate(formData.date, formData.subType)
+        ? concertStages.find((item) => item.date === formData.stageDate)
         : null;
     const concertStageIndex = matchedStage
-      ? Math.max(concertStages.findIndex((item) => item.id === matchedStage.stageId), 0)
+      ? Math.max(concertStages.findIndex((item) => item.stageId === matchedStage.stageId), 0)
       : 0;
-    const priceTiers = matchedStage ? matchedStage.priceTiers || [] : [];
+    const priceTiers = matchedStage ? getPositivePriceTiers(matchedStage) : [];
     const priceTierLabels = priceTiers.map((price) => `${price} 元`);
     const priceTierIndex = Math.max(priceTiers.findIndex((price) => String(price) === String(formData.priceTier)), 0);
     const shouldAutoFillStage =
       formData.category === 'meet' &&
-      (formData.subType === 'concert' || formData.subType === 'festival') &&
+      isMeetStage &&
       matchedStage &&
-      (!formData.stageId || formData.stageDate !== formData.date);
+      formData.stageId !== matchedStage.stageId;
+    const shouldUseOfficialTier = formData.category === 'meet' && formData.purchaseChannel === 'official';
     const nextFormData = shouldAutoFillStage
       ? {
           ...formData,
@@ -299,7 +380,7 @@ Page({
           itemName: matchedStage.stageName,
           city: matchedStage.city || formData.city,
           location: matchedStage.location || formData.location,
-          amount: priceTiers.length ? String(priceTiers[0]) : formData.amount,
+          amount: shouldUseOfficialTier && priceTiers.length ? String(priceTiers[0]) : formData.amount,
           priceTier: priceTiers.length ? String(priceTiers[0]) : ''
         }
       : matchedStage
@@ -307,7 +388,6 @@ Page({
         : {
             ...formData,
             stageId: '',
-            stageDate: '',
             priceTier: isDateMatchedMeet ? '' : formData.priceTier
           };
 
@@ -319,8 +399,8 @@ Page({
       subTypeIndex: safeSubTypeIndex,
       concertStages,
       concertStageIndex,
-      priceTiers,
-      priceTierLabels,
+        priceTiers,
+        priceTierLabels,
       priceTierIndex,
       matchedMeetStageName: matchedStage ? matchedStage.stageName : ''
     });
@@ -339,19 +419,13 @@ Page({
     });
   },
 
-  handleFeeInput(event) {
-    const field = event.currentTarget.dataset.field;
-    this.setData({
-      [`formData.fees.${field}`]: event.detail.value
-    });
-  },
-
   handleCategoryChange(event) {
     const categoryIndex = Number(event.detail.value);
     const category = this.data.categories[categoryIndex];
     const firstSubType = category.subTypes[0];
     const isCollection = category.id === 'collection';
     const isDirectCost = ['transport', 'accommodation', 'other'].includes(category.id);
+    const hasPurchaseChannel = ['meet', 'collection'].includes(category.id);
     this.applyFormState({
       categoryIndex,
       subTypeIndex: 0,
@@ -369,8 +443,8 @@ Page({
         city: '',
         location: '',
         seat: '',
-        purchaseChannel: isDirectCost ? 'none' : 'none',
-        pricingMode: isDirectCost ? 'direct' : 'direct',
+        purchaseChannel: hasPurchaseChannel ? 'official' : isDirectCost ? 'none' : 'none',
+        pricingMode: hasPurchaseChannel ? 'official_unit' : 'direct',
         referencePrice: '',
         unitPrice: '',
         expenseSource: 'manual'
@@ -378,7 +452,12 @@ Page({
       purchaseChannelIndex: 0,
       pricingModeIndex: 0,
       searchKeyword: '',
-      searchResults: []
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
@@ -390,8 +469,20 @@ Page({
       formData: {
         ...this.data.formData,
         subType: subType.id,
-        itemName: this.data.formData.category === 'meet' ? subType.name : this.data.formData.itemName
+        itemName: this.data.formData.category === 'meet' ? subType.name : this.data.formData.itemName,
+        stageId: '',
+        stageDate: '',
+        priceTier: '',
+        amount: this.data.formData.category === 'meet' ? '' : this.data.formData.amount
       }
+    ,
+      searchKeyword: '',
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
@@ -406,9 +497,19 @@ Page({
   handlePurchaseChannelChange(event) {
     const purchaseChannelIndex = Number(event.detail.value);
     const purchaseChannel = this.data.purchaseChannels[purchaseChannelIndex];
+    const isMeet = this.data.formData.category === 'meet';
+    const hasPriceTier = this.data.priceTiers.length > 0;
+    const pricingMode = isMeet && purchaseChannel.id === 'official' && hasPriceTier ? 'official_unit' : 'total';
+    const pricingModeIndex = Math.max(
+      this.data.pricingModes.findIndex((item) => item.id === pricingMode),
+      0
+    );
     this.setData({
       purchaseChannelIndex,
-      'formData.purchaseChannel': purchaseChannel.id
+      pricingModeIndex,
+      'formData.purchaseChannel': purchaseChannel.id,
+      'formData.pricingMode': pricingMode,
+      'formData.amount': isMeet && purchaseChannel.id === 'official' && hasPriceTier ? this.data.formData.priceTier : ''
     });
   },
 
@@ -423,44 +524,28 @@ Page({
 
   handleDateChange(event) {
     const date = event.detail.value;
-    if (
-      this.data.formData.category === 'meet' &&
-      (this.data.formData.subType === 'concert' || this.data.formData.subType === 'festival')
-    ) {
-      const matchedStage = stageService.findStageByDate(date, this.data.formData.subType);
+    this.setData({
+      'formData.date': date
+    });
+  },
+
+  handleMeetDateChange(event) {
+    const date = event.detail.value;
+    if (this.data.formData.category === 'meet' && isMeetStageType(this.data.formData.subType)) {
+      const matchedStage = this.data.concertStages.find((item) => item.date === date);
       if (matchedStage) {
-        const priceTiers = matchedStage.priceTiers || [];
-        const priceTierLabels = priceTiers.map((price) => `${price} 元`);
-        this.setData({
-          'formData.date': date,
-          'formData.stageId': matchedStage.stageId,
-          'formData.stageDate': matchedStage.date,
-          'formData.itemName': matchedStage.stageName,
-          'formData.city': matchedStage.city || '',
-          'formData.location': matchedStage.location || '',
-          'formData.amount': priceTiers.length ? String(priceTiers[0]) : '',
-          'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : '',
-          concertStageIndex: Math.max(
-            this.data.concertStages.findIndex((item) => item.id === matchedStage.stageId),
-            0
-          ),
-          priceTiers,
-          priceTierLabels,
-          priceTierIndex: 0,
-          matchedMeetStageName: matchedStage.stageName
-        });
+        this.applySelectedMeetStage(matchedStage);
         return;
       }
 
-      const fallbackName = this.data.formData.subType === 'festival' ? '音乐节|拼盘' : '演唱会';
+      const fallbackName = getMeetStageLabel(this.data.formData.subType);
       this.setData({
-        'formData.date': date,
         'formData.stageId': '',
-        'formData.stageDate': '',
+        'formData.stageDate': date,
         'formData.itemName': this.data.matchedMeetStageName ? fallbackName : this.data.formData.itemName || fallbackName,
         'formData.city': this.data.matchedMeetStageName ? '' : this.data.formData.city,
         'formData.location': this.data.matchedMeetStageName ? '' : this.data.formData.location,
-        'formData.amount': '',
+        'formData.amount': this.data.formData.purchaseChannel === 'official' ? '' : this.data.formData.amount,
         'formData.priceTier': '',
         priceTiers: [],
         priceTierLabels: [],
@@ -469,30 +554,58 @@ Page({
       });
       return;
     }
-
-    this.setData({
-      'formData.date': date
-    });
   },
 
   handleConcertStageChange(event) {
     const concertStageIndex = Number(event.detail.value);
     const stage = this.data.concertStages[concertStageIndex];
-    const priceTiers = stage.priceTiers || [];
+    this.applySelectedMeetStage(stage, { concertStageIndex });
+  },
+
+  handleStageDateOptionChange(event) {
+    const stageDateIndex = Number(event.detail.value);
+    const stage = this.data.stageDateOptions[stageDateIndex];
+    if (!stage) {
+      return;
+    }
+    this.applySelectedMeetStage(stage, { stageDateIndex });
+  },
+
+  applySelectedMeetStage(stage, extraState = {}) {
+    const priceTiers = getPositivePriceTiers(stage);
     const priceTierLabels = priceTiers.map((price) => `${price} 元`);
+    const shouldUseOfficialTier = this.data.formData.purchaseChannel === 'official';
+    const stageType = inferMeetStageType(stage);
+    const category = this.data.categories[this.data.categoryIndex] || {};
+    const subTypes = category.subTypes || [];
+    const subTypeIndex = Math.max(subTypes.findIndex((item) => item.id === stageType), 0);
+    const concertStages = (this.data.meetStages || []).filter((item) => (
+      inferMeetStageType(item) === stageType
+    ));
     this.setData({
-      concertStageIndex,
+      ...extraState,
+      subTypeIndex,
+      concertStages,
+      concertStageIndex: Math.max(
+        concertStages.findIndex((item) => item.stageId === stage.stageId),
+        0
+      ),
       priceTiers,
       priceTierLabels,
       priceTierIndex: 0,
-      'formData.stageId': stage.id,
+      matchedMeetStageName: stage.stageName,
+      searchKeyword: stage.stageName,
+      meetSearchKeyword: stage.stageName || '',
+      searchResults: [],
+      'formData.subType': stageType,
+      'formData.stageId': stage.stageId,
       'formData.stageDate': stage.date,
-      'formData.date': stage.date,
       'formData.itemName': stage.stageName,
       'formData.city': stage.city || '',
-      'formData.location': stage.location || '',
-      'formData.amount': priceTiers.length ? String(priceTiers[0]) : '',
-      'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : ''
+      'formData.location': stage.venue || stage.location || '',
+      'formData.amount': shouldUseOfficialTier && priceTiers.length ? String(priceTiers[0]) : '',
+      'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : '',
+      'formData.pricingMode': shouldUseOfficialTier && priceTiers.length ? 'official_unit' : 'total'
     });
   },
 
@@ -504,33 +617,66 @@ Page({
     }
     this.setData({
       priceTierIndex,
-      'formData.amount': String(priceTier),
+      'formData.amount': this.data.formData.purchaseChannel === 'official' ? String(priceTier) : this.data.formData.amount,
       'formData.priceTier': String(priceTier)
-    });
-  },
-
-  handleOutfieldChange(event) {
-    const outfieldOnly = event.detail.value;
-    const isConcert = this.data.formData.category === 'meet' && this.data.formData.subType === 'concert';
-    this.setData({
-      'formData.outfieldOnly': outfieldOnly,
-      'formData.includeInTotal': isConcert ? true : !outfieldOnly
     });
   },
 
   handleIncludeChange(event) {
     this.setData({
-      'formData.includeInTotal': event.detail.value,
-      'formData.outfieldOnly': !event.detail.value
+      'formData.includeInTotal': event.detail.value
     });
   },
 
   async handleItemSearchInput(event) {
-    const searchKeyword = event.detail.value;
+    const rawValue =
+      event &&
+      event.detail &&
+      typeof event.detail.value !== 'undefined'
+        ? String(event.detail.value)
+        : '';
+    const searchKeyword = rawValue === 'undefined' ? '' : rawValue;
     const category = this.data.formData.category;
+    if (category === 'meet') {
+      this.setData({
+        searchKeyword,
+        meetSearchKeyword: searchKeyword
+      });
+      const keyword = searchKeyword.trim();
+      if (!keyword) {
+        this.setData({
+          searchResults: []
+        });
+        return;
+      }
+      const stageGroups = [];
+      const stageGroupMap = {};
+      (this.data.meetStages || [])
+        .filter((stage) => String(stage.stageName || '').indexOf(keyword) >= 0)
+        .forEach((stage) => {
+          const key = stage.stageName || stage.stageId;
+          if (!stageGroupMap[key]) {
+            stageGroupMap[key] = {
+              id: key,
+              type: 'stage',
+              stageName: stage.stageName,
+              highlightSegments: buildHighlightedSegments(stage.stageName, keyword),
+              displayMeta: `${getMeetStageLabel(inferMeetStageType(stage))} · ${stage.city || ''} · ${stage.venue || stage.location || ''}`,
+              stages: []
+            };
+            stageGroups.push(stageGroupMap[key]);
+          }
+          stageGroupMap[key].stages.push(stage);
+        });
+      this.setData({
+        searchResults: stageGroups.slice(0, 8)
+      });
+      return;
+    }
     if (category === 'collection') {
       this.setData({
-        searchKeyword
+        searchKeyword,
+        collectionSearchKeyword: searchKeyword
       });
       if (!searchKeyword.trim()) {
         this.setData({
@@ -543,6 +689,8 @@ Page({
         this.setData({
           searchResults: (results || []).slice(0, 8).map((item) => ({
             ...item,
+            type: 'collection',
+            highlightSegments: buildHighlightedSegments(item.collectionName, searchKeyword.trim()),
             displayMeta: item.priceText || (
               item.referencePrice ? `参考价 ¥${item.referencePrice}` : '暂无参考价'
             )
@@ -557,13 +705,36 @@ Page({
       return;
     }
     this.setData({
-      searchKeyword,
       searchResults: []
     });
   },
 
   handleSelectSearchItem(event) {
     const { id } = event.currentTarget.dataset;
+    if (this.data.formData.category === 'meet') {
+      const group = this.data.searchResults.find((candidate) => candidate.id === id);
+      if (!group) {
+        return;
+      }
+      const stageDateOptions = group.stages || [];
+      const stageDateLabels = stageDateOptions.map((stage) => `${stage.date} ${stage.city || ''} ${stage.venue || stage.location || ''}`);
+      const firstStage = stageDateOptions[0];
+      if (!firstStage) {
+        return;
+      }
+      this.setData({
+        stageDateOptions,
+        stageDateLabels,
+        stageDateIndex: 0
+      });
+      this.applySelectedMeetStage(firstStage, {
+        stageDateOptions,
+        stageDateLabels,
+        stageDateIndex: 0,
+        meetSearchKeyword: firstStage.stageName || ''
+      });
+      return;
+    }
     if (this.data.formData.category === 'collection') {
       const item = this.data.searchResults.find((candidate) => candidate.collectionId === id);
       if (!item) {
@@ -586,9 +757,10 @@ Page({
         'formData.purchaseChannel': referencePrice ? 'official' : 'none',
         'formData.pricingMode': pricingMode,
         'formData.expenseSource': 'collection',
-        searchKeyword: item.collectionName,
+        searchKeyword: item.collectionName || '',
+        collectionSearchKeyword: item.collectionName || '',
         searchResults: [],
-        purchaseChannelIndex: referencePrice ? 1 : 0,
+        purchaseChannelIndex: referencePrice ? 0 : 1,
         pricingModeIndex
       });
       return;
