@@ -1,5 +1,8 @@
 const collectionService = require('../../services/collectionService');
 
+const PENDING_COLLECTION_DRAFT_KEY = 'pendingCollectionExpenseDraft';
+const MAX_SEARCH_LENGTH = 40;
+
 const ALL = '全部';
 const STYLE_ORDER = ['单人款', '团体款', '套装款', '普通款', '高会款', '组合款', '单品款'];
 
@@ -119,7 +122,15 @@ Page({
     };
   },
 
-  handleKeywordInput(event) { this.setData({ keyword: event.detail.value }); },
+  handleKeywordInput(event) {
+    const value = String(event.detail.value || '');
+    if (value.length > MAX_SEARCH_LENGTH) {
+      wx.showToast({ title: `\u641c\u7d22\u5173\u952e\u8bcd\u4e0a\u9650\u4e3a ${MAX_SEARCH_LENGTH} \u4e2a\u5b57`, icon: 'none' });
+      return this.data.keyword;
+    }
+    this.setData({ keyword: value });
+    return value;
+  },
   handlePrimaryChange(event) {
     const primaryIndex = Number(event.detail.value);
     const primary = this.data.primaryOptions[primaryIndex];
@@ -176,17 +187,66 @@ Page({
     if (collection.isOwned) this.confirmUnlight(collection); else this.confirmLight(collection);
   },
   confirmLight(collection) {
-    wx.showModal({ title: '点亮藏品', content: `确认点亮“${collection.collectionName}”吗？`, confirmColor: '#E9A6B3',
-      success: async (res) => { if (res.confirm) await this.lightCollection(collection); } });
+    wx.showModal({
+      title: '\u70b9\u4eae\u85cf\u54c1',
+      content: `\u786e\u8ba4\u70b9\u4eae\u300c${collection.collectionName}\u300d\u5417\uff1f`,
+      confirmText: '\u70b9\u4eae',
+      confirmColor: '#E9A6B3',
+      success: async (res) => {
+        if (res.confirm) {
+          await this.lightCollection(collection);
+        }
+      }
+    });
   },
   async lightCollection(collection) {
     this.setData({ busyCollectionId: collection.collectionId });
+    let shouldPromptDraft = false;
     try {
       await collectionService.lightCollection(collection.collectionId);
       this.updateOwned(collection.collectionId, true);
-      wx.showToast({ title: '已点亮', icon: 'success' });
-    } catch (error) { wx.showToast({ title: error.message || '点亮失败', icon: 'none' }); }
+      shouldPromptDraft = true;
+    } catch (error) { wx.showToast({ title: error.message || '\u70b9\u4eae\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', icon: 'none' }); }
     finally { this.setData({ busyCollectionId: '' }); }
+    if (shouldPromptDraft) {
+      setTimeout(() => {
+        this.promptCreateExpenseDraft(collection);
+      }, 150);
+    }
+  },
+  promptCreateExpenseDraft(collection) {
+    wx.showModal({
+      title: '\u5df2\u70b9\u4eae',
+      content: `\u662f\u5426\u4e3a\u300c${collection.collectionName}\u300d\u65b0\u589e\u4e00\u6761\u6d88\u8d39\u8bb0\u5f55\uff1f`,
+      cancelText: '\u4ec5\u70b9\u4eae',
+      confirmText: '\u53bb\u65b0\u589e',
+      confirmColor: '#E9A6B3',
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        wx.setStorageSync(PENDING_COLLECTION_DRAFT_KEY, {
+          collectionId: collection.collectionId,
+          createdAt: Date.now()
+        });
+        wx.switchTab({
+          url: '/pages/expenses/index',
+          fail: () => {
+            wx.removeStorageSync(PENDING_COLLECTION_DRAFT_KEY);
+            wx.showToast({
+              title: '\u8df3\u8f6c\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u5c1d\u8bd5',
+              icon: 'none'
+            });
+          }
+        });
+      },
+      fail: () => {
+        wx.showToast({
+          title: '\u5df2\u70b9\u4eae\uff0c\u8bf7\u5230\u6d88\u8d39\u9875\u624b\u52a8\u65b0\u589e',
+          icon: 'none'
+        });
+      }
+    });
   },
   confirmUnlight(collection) {
     wx.showModal({ title: '取消点亮', content: `确认取消“${collection.collectionName}”的点亮状态吗？`, confirmText: '取消点亮', confirmColor: '#E9A6B3',

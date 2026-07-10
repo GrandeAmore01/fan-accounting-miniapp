@@ -1,6 +1,12 @@
 const expenseService = require('../../services/expenseService');
 const stageService = require('../../services/stageService');
 
+const MAX_SEARCH_LENGTH = 40;
+const MAX_NAME_LENGTH = 80;
+const MAX_TEXT_LENGTH = 120;
+const MAX_REMARK_LENGTH = 160;
+const MAX_AMOUNT = 1000000;
+
 function inferMeetStageType(stage) {
   const name = `${stage.stageName || ''}${stage.name || ''}`;
   if (name.indexOf('新年音乐会') >= 0) {
@@ -361,9 +367,11 @@ Component({
 
     handleFormInput(event) {
       const { field } = event.currentTarget.dataset;
+      const value = this.sanitizeFormInput(field, event.detail.value);
       this.setData({
-        [`formData.${field}`]: event.detail.value
+        [`formData.${field}`]: value
       });
+      return value;
     },
 
     handleIncludeChange(event) {
@@ -373,7 +381,12 @@ Component({
     },
 
     handleItemSearchInput(event) {
-      const searchKeyword = String(event.detail.value || '');
+      const searchKeyword = this.limitPlainText(
+        event.detail.value,
+        this.data.searchKeyword,
+        MAX_SEARCH_LENGTH,
+        '\u641c\u7d22\u5173\u952e\u8bcd'
+      );
       this.setData({ searchKeyword });
       const keyword = searchKeyword.trim();
       if (!keyword) {
@@ -401,6 +414,59 @@ Component({
       this.setData({
         searchResults: stageGroups.slice(0, 8)
       });
+    },
+
+    showInputLimitToast(title) {
+      const now = Date.now();
+      if (now - (this.inputLimitToastAt || 0) < 1200) {
+        return;
+      }
+      this.inputLimitToastAt = now;
+      wx.showToast({ title, icon: 'none' });
+    },
+
+    limitPlainText(value, previousValue, maxLength, fieldName) {
+      const nextValue = String(value || '');
+      if (nextValue.length <= maxLength) {
+        return nextValue;
+      }
+      this.showInputLimitToast(`${fieldName}\u4e0a\u9650\u4e3a ${maxLength} \u4e2a\u5b57`);
+      return String(previousValue || '');
+    },
+
+    sanitizeAmountInput(value, previousValue) {
+      const nextValue = String(value || '');
+      const previous = String(previousValue || '');
+      if (!nextValue) {
+        return '';
+      }
+      if (!/^\d*(\.\d{0,2})?$/.test(nextValue)) {
+        this.showInputLimitToast('\u91d1\u989d\u6700\u591a\u4fdd\u7559 2 \u4f4d\u5c0f\u6570');
+        return previous;
+      }
+      const amount = Number(nextValue);
+      if (Number.isFinite(amount) && amount > MAX_AMOUNT) {
+        this.showInputLimitToast(`\u91d1\u989d\u4e0a\u9650\u4e3a ${MAX_AMOUNT}`);
+        return previous;
+      }
+      return nextValue;
+    },
+
+    sanitizeFormInput(field, value) {
+      const previousValue = this.data.formData[field];
+      if (field === 'amount') {
+        return this.sanitizeAmountInput(value, previousValue);
+      }
+      if (field === 'itemName') {
+        return this.limitPlainText(value, previousValue, MAX_NAME_LENGTH, '\u9879\u76ee\u540d\u79f0');
+      }
+      if (field === 'remark') {
+        return this.limitPlainText(value, previousValue, MAX_REMARK_LENGTH, '\u5907\u6ce8');
+      }
+      if (['city', 'location', 'seat'].includes(field)) {
+        return this.limitPlainText(value, previousValue, MAX_TEXT_LENGTH, '\u8be5\u5185\u5bb9');
+      }
+      return value;
     },
 
     handleSelectSearchItem(event) {

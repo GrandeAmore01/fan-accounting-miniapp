@@ -1,5 +1,7 @@
 const stageService = require('../../services/stageService');
 
+const PENDING_STAGE_DRAFT_KEY = 'pendingStageExpenseDraft';
+
 Page({
   data: {
     loading: true,
@@ -155,6 +157,23 @@ Page({
     this.lightStageById(id);
   },
 
+  openStageExpenseDraft(stageId) {
+    wx.setStorageSync(PENDING_STAGE_DRAFT_KEY, {
+      stageId,
+      createdAt: Date.now()
+    });
+    wx.switchTab({
+      url: '/pages/expenses/index',
+      fail: () => {
+        wx.removeStorageSync(PENDING_STAGE_DRAFT_KEY);
+        this.setData({
+          expenseModalVisible: true,
+          expenseModalStageId: stageId
+        });
+      }
+    });
+  },
+
   async lightStageById(id) {
     const result = await stageService.lightStage(id);
     if (!result.valid) {
@@ -179,10 +198,7 @@ Page({
           this.refreshPage();
           return;
         }
-        this.setData({
-          expenseModalVisible: true,
-          expenseModalStageId: id
-        });
+        this.openStageExpenseDraft(id);
       }
     });
   },
