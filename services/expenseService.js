@@ -1,7 +1,7 @@
-const storageService = require('./storageService');
 const stageService = require('./stageService');
 const apiService = require('./apiService');
 const config = require('./config');
+const collectionService = require('./collectionService');
 
 const USER_ID = config.userId || 'local-user';
 const EXPENSE_API_BASE_URL = config.expenseApiBaseUrl || config.apiBaseUrl;
@@ -20,9 +20,9 @@ const expenseTypes = [
     name: '藏品',
     subTypes: [
       { id: 'goods', name: '周边' },
-      { id: 'album', name: '实体专辑' },
+      { id: 'magazine', name: '杂志' },
       { id: 'gift', name: '伴手礼' },
-      { id: 'other_collection', name: '其他藏品' }
+      { id: 'support_wear', name: '应援服' }
     ]
   },
   {
@@ -44,6 +44,15 @@ const expenseTypes = [
 const searchableItems = [];
 const expenseCategories = expenseTypes;
 const feeLabels = {};
+const MAX_NAME_LENGTH = 80;
+const MAX_TEXT_LENGTH = 120;
+const MAX_REMARK_LENGTH = 160;
+const MAX_COLLECTION_QUANTITY = 100;
+let expenseListCache = [];
+const legacyCollectionSubTypes = {
+  album: { id: 'album', name: '实体专辑' },
+  other_collection: { id: 'other_collection', name: '其他藏品' }
+};
 
 function getMainType(mainTypeId) {
   return expenseTypes.find((item) => item.id === mainTypeId);
@@ -54,7 +63,30 @@ function getSubType(mainTypeId, subTypeId) {
   if (!mainType) {
     return null;
   }
-  return mainType.subTypes.find((item) => item.id === subTypeId);
+  return mainType.subTypes.find((item) => item.id === subTypeId) ||
+    (mainTypeId === 'collection' ? legacyCollectionSubTypes[subTypeId] : null);
+}
+
+function inferCollectionSubType(collection = {}) {
+  const text = [
+    collection.collectionCategory,
+    collection.category,
+    collection.primaryCategory,
+    collection.secondaryCategory,
+    collection.productStyle,
+    collection.collectionName
+  ].filter(Boolean).join(' ');
+
+  if (/应援服|服装|衣服|T恤|卫衣|support/i.test(text)) {
+    return 'support_wear';
+  }
+  if (/伴手礼|票根赠品|赠品|gift/i.test(text)) {
+    return 'gift';
+  }
+  if (/杂志|刊物|magazine/i.test(text)) {
+    return 'magazine';
+  }
+  return 'goods';
 }
 
 function getCategoryName(categoryId, subTypeId) {
@@ -151,7 +183,7 @@ function enrichExpense(item) {
 }
 
 function listExpenses() {
-  return storageService.getCollection(USER_ID, 'expenses').map(enrichExpense);
+  return expenseListCache;
 }
 
 function normalizeExpense(expense) {
@@ -202,6 +234,19 @@ function validateExpense(expense) {
   if (nextExpense.category === 'meet' && !nextExpense.stageDate) {
     return { valid: false, message: '请选择见面日期' };
   }
+  if (nextExpense.itemName.length > MAX_NAME_LENGTH) {
+    return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
+  }
+  if (nextExpense.remark.length > MAX_REMARK_LENGTH) {
+    return { valid: false, message: `备注上限为 ${MAX_REMARK_LENGTH} 个字` };
+  }
+  if (
+    nextExpense.city.length > MAX_TEXT_LENGTH ||
+    nextExpense.location.length > MAX_TEXT_LENGTH ||
+    nextExpense.seat.length > MAX_TEXT_LENGTH
+  ) {
+    return { valid: false, message: `城市、地点或座位上限为 ${MAX_TEXT_LENGTH} 个字` };
+  }
   if (!nextExpense.amount || nextExpense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };
   }
@@ -218,9 +263,9 @@ function validateExpense(expense) {
     if (
       !Number.isInteger(nextExpense.quantity) ||
       nextExpense.quantity < 1 ||
-      nextExpense.quantity > 10
+      nextExpense.quantity > MAX_COLLECTION_QUANTITY
     ) {
-      return { valid: false, message: '藏品数量必须是 1 到 10 之间的整数' };
+      return { valid: false, message: `藏品数量必须是 1 到 ${MAX_COLLECTION_QUANTITY} 之间的整数` };
     }
   } else if (!nextExpense.quantity || nextExpense.quantity <= 0) {
     return { valid: false, message: '请输入大于 0 的数量' };
@@ -241,42 +286,51 @@ function syncStageLight(expense) {
   }
 }
 
-function addExpense(expense) {
-  const validation = validateExpense(expense);
-  if (!validation.valid) {
-    return validation;
+async function syncDeletedExpenseLinksAsync(removed) {
+  if (!removed) {
+    return;
   }
-  const expenses = storageService.getCollection(USER_ID, 'expenses');
-  const nextExpense = validation.data;
-  storageService.setCollection(USER_ID, 'expenses', [nextExpense, ...expenses]);
-  syncStageLight(nextExpense);
-  return { valid: true, data: nextExpense };
+  const expenses = await listExpensesAsync();
+
+  if (removed.stageId) {
+    const remainingStageExpense = expenses.find((item) => item.stageId === removed.stageId);
+    if (remainingStageExpense) {
+      await stageService.linkStageExpense(
+        removed.stageId,
+        remainingStageExpense.expenseId,
+        Number(remainingStageExpense.priceTier || remainingStageExpense.amount || 0)
+      );
+    } else {
+      await stageService.unlightStage(removed.stageId);
+    }
+  }
+
+  if (removed.collectionId) {
+    const hasRemainingCollectionExpense = expenses.some(
+      (item) => item.collectionId === removed.collectionId
+    );
+    if (!hasRemainingCollectionExpense) {
+      await collectionService.unlightCollection(removed.collectionId);
+    }
+  }
+}
+
+function addExpense(expense) {
+  return {
+    valid: false,
+    message: '消费记录已切换为云端存储，请使用 addExpenseAsync'
+  };
 }
 
 function updateExpense(expenseId, expense) {
-  const validation = validateExpense({
-    ...expense,
-    expenseId
-  });
-  if (!validation.valid) {
-    return validation;
-  }
-  const expenses = storageService.getCollection(USER_ID, 'expenses');
-  const nextExpenses = expenses.map((item) => (item.expenseId === expenseId ? validation.data : item));
-  storageService.setCollection(USER_ID, 'expenses', nextExpenses);
-  syncStageLight(validation.data);
-  return { valid: true, data: validation.data };
+  return {
+    valid: false,
+    message: '消费记录已切换为云端存储，请使用 updateExpenseAsync'
+  };
 }
 
 function removeExpense(expenseId) {
-  const expenses = storageService.getCollection(USER_ID, 'expenses');
-  const removed = expenses.find((item) => item.expenseId === expenseId);
-  const nextExpenses = expenses.filter((item) => item.expenseId !== expenseId);
-  storageService.setCollection(USER_ID, 'expenses', nextExpenses);
-  if (removed && removed.stageId) {
-    stageService.clearStageExpenseLink(removed.stageId, expenseId);
-  }
-  return nextExpenses;
+  return false;
 }
 
 function filterExpenses(filter) {
@@ -350,27 +404,23 @@ function getCategoryStats() {
 }
 
 async function listExpensesAsync() {
-  if (!config.useBackend) {
-    return listExpenses();
-  }
   const data = await apiService.request({
     baseUrl: EXPENSE_API_BASE_URL,
     url: `/expenses${apiService.buildQuery({ userId: USER_ID })}`
   });
-  return (data || []).map(enrichExpense);
+  expenseListCache = (data || []).map(enrichExpense);
+  return expenseListCache;
 }
 
 async function listMeetStagesAsync() {
-  if (config.useBackend) {
-    try {
-      const data = await apiService.request({
-        baseUrl: EXPENSE_API_BASE_URL,
-        url: '/expenses/meet-stages'
-      });
-      return data || [];
-    } catch (error) {
-      console.warn('消费模块见面场次加载失败，回退舞台缓存', error);
-    }
+  try {
+    const data = await apiService.request({
+      baseUrl: EXPENSE_API_BASE_URL,
+      url: '/expenses/meet-stages'
+    });
+    return data || [];
+  } catch (error) {
+    console.warn('meet stages api failed, fallback to stage cache', error);
   }
   await stageService.ensureStagesLoaded();
   return stageService.listStages();
@@ -392,9 +442,6 @@ async function getCategoryStatsAsync() {
 }
 
 async function addExpenseAsync(expense) {
-  if (!config.useBackend) {
-    return addExpense(expense);
-  }
   const validation = validateExpense(expense);
   if (!validation.valid) {
     return validation;
@@ -410,6 +457,7 @@ async function addExpenseAsync(expense) {
       }
     });
     const nextExpense = enrichExpense(data);
+    expenseListCache = [nextExpense, ...expenseListCache.filter((item) => item.expenseId !== nextExpense.expenseId)];
     syncStageLight(nextExpense);
     return { valid: true, data: nextExpense };
   } catch (error) {
@@ -418,9 +466,6 @@ async function addExpenseAsync(expense) {
 }
 
 async function updateExpenseAsync(expenseId, expense) {
-  if (!config.useBackend) {
-    return updateExpense(expenseId, expense);
-  }
   const validation = validateExpense({
     ...expense,
     expenseId
@@ -439,6 +484,9 @@ async function updateExpenseAsync(expenseId, expense) {
       }
     });
     const nextExpense = enrichExpense(data);
+    expenseListCache = expenseListCache.map((item) => (
+      item.expenseId === nextExpense.expenseId ? nextExpense : item
+    ));
     syncStageLight(nextExpense);
     return { valid: true, data: nextExpense };
   } catch (error) {
@@ -446,15 +494,15 @@ async function updateExpenseAsync(expenseId, expense) {
   }
 }
 
-async function removeExpenseAsync(expenseId) {
-  if (!config.useBackend) {
-    return removeExpense(expenseId);
-  }
+async function removeExpenseAsync(expenseId, removedExpense = null) {
+  const removed = removedExpense || (await listExpensesAsync()).find((item) => item.expenseId === expenseId);
   await apiService.request({
     baseUrl: EXPENSE_API_BASE_URL,
     url: `/expenses/${expenseId}${apiService.buildQuery({ userId: USER_ID })}`,
     method: 'DELETE'
   });
+  expenseListCache = expenseListCache.filter((item) => item.expenseId !== expenseId);
+  await syncDeletedExpenseLinksAsync(removed);
   return true;
 }
 
@@ -463,6 +511,7 @@ module.exports = {
   searchableItems,
   getMainType,
   getSubType,
+  inferCollectionSubType,
   getCategoryName,
   calculateTotalAmount,
   calculateIncludedAmount,

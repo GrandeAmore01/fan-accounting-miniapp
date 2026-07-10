@@ -13,7 +13,7 @@
   </view>
 
   <view class="toolbar card">
-    <input class="search-input" value="{{keyword}}" placeholder="搜索藏品名称或所属系列" bindinput="handleKeywordInput" />
+    <input class="search-input" value="{{keyword}}" maxlength="40" placeholder="搜索藏品名称或所属系列" bindinput="handleKeywordInput" />
     <view class="filter-grid">
       <picker range="{{primaryOptions}}" value="{{primaryIndex}}" bindchange="handlePrimaryChange">
         <view class="picker-field">一级：{{primaryOptions[primaryIndex]}}</view>

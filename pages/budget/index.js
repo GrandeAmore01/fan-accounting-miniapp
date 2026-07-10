@@ -227,8 +227,17 @@ Page({
     this.refreshPage();
   },
 
-  refreshPage() {
-    const dashboard = budgetService.getBudgetDashboard(this.data.selectedType, this.data.selectedPeriod);
+  async refreshPage() {
+    let dashboard;
+    try {
+      dashboard = await budgetService.getBudgetDashboardAsync(this.data.selectedType, this.data.selectedPeriod);
+    } catch (error) {
+      wx.showToast({
+        title: error.message || '预算统计加载失败',
+        icon: 'none'
+      });
+      return;
+    }
     const categoryStats = dashboard.categoryStats.map((item, index) => ({
       ...item,
       categoryName: getMainCategoryName(item.categoryName),

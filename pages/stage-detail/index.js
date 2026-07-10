@@ -1,5 +1,7 @@
 const stageService = require('../../services/stageService');
 
+const PENDING_STAGE_DRAFT_KEY = 'pendingStageExpenseDraft';
+
 Page({
   data: {
     loading: true,
@@ -113,6 +115,20 @@ Page({
           this.loadDetail();
           return;
         }
+        this.openStageExpenseDraft();
+      }
+    });
+  },
+
+  openStageExpenseDraft() {
+    wx.setStorageSync(PENDING_STAGE_DRAFT_KEY, {
+      stageId: this.data.stageId,
+      createdAt: Date.now()
+    });
+    wx.switchTab({
+      url: '/pages/expenses/index',
+      fail: () => {
+        wx.removeStorageSync(PENDING_STAGE_DRAFT_KEY);
         this.setData({ expenseModalVisible: true });
       }
     });

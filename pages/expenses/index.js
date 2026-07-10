@@ -1,6 +1,33 @@
 const expenseService = require('../../services/expenseService');
 const budgetService = require('../../services/budgetService');
 const collectionCatalogService = require('../../services/collectionCatalogService');
+const stageService = require('../../services/stageService');
+
+const PENDING_COLLECTION_DRAFT_KEY = 'pendingCollectionExpenseDraft';
+const PENDING_STAGE_DRAFT_KEY = 'pendingStageExpenseDraft';
+const PENDING_COLLECTION_DRAFT_MAX_AGE = 10 * 60 * 1000;
+const MAX_SEARCH_LENGTH = 40;
+const MAX_NAME_LENGTH = 80;
+const MAX_TEXT_LENGTH = 120;
+const MAX_REMARK_LENGTH = 160;
+const MAX_AMOUNT = 1000000;
+const MAX_COLLECTION_QUANTITY = 100;
+
+const TEXT_FIELD_LIMITS = {
+  itemName: MAX_NAME_LENGTH,
+  city: MAX_TEXT_LENGTH,
+  location: MAX_TEXT_LENGTH,
+  seat: MAX_TEXT_LENGTH,
+  remark: MAX_REMARK_LENGTH
+};
+
+const TEXT_FIELD_NAMES = {
+  itemName: '\u9879\u76ee\u540d\u79f0',
+  city: '\u57ce\u5e02',
+  location: '\u5730\u70b9',
+  seat: '\u5ea7\u4f4d',
+  remark: '\u5907\u6ce8'
+};
 
 function inferMeetStageType(stage) {
   const name = `${stage.stageName || ''}${stage.name || ''}`;
@@ -159,6 +186,7 @@ Page({
     stageDateIndex: 0,
     formVisible: false,
     formMode: 'create',
+    formSubmitting: false,
     formTitle: '新增消费记录',
     formData: createDefaultFormData(),
     categoryIndex: 0,
@@ -174,8 +202,10 @@ Page({
     }
   },
 
-  onShow() {
-    this.refreshPage();
+  async onShow() {
+    await this.refreshPage();
+    await this.openPendingCollectionExpenseDraft();
+    await this.openPendingStageExpenseDraft();
   },
 
   async refreshPage() {
@@ -244,11 +274,90 @@ Page({
     return meetStages;
   },
 
+  async openPendingCollectionExpenseDraft() {
+    const draft = wx.getStorageSync(PENDING_COLLECTION_DRAFT_KEY);
+    if (!draft || !draft.collectionId) {
+      return;
+    }
+    wx.removeStorageSync(PENDING_COLLECTION_DRAFT_KEY);
+
+    if (Date.now() - Number(draft.createdAt || 0) > PENDING_COLLECTION_DRAFT_MAX_AGE) {
+      wx.showToast({
+        title: '藏品信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+      return;
+    }
+
+    try {
+      const collection = await collectionCatalogService.getCollection(draft.collectionId);
+      this.openCollectionExpenseDraft(collection);
+    } catch (error) {
+      wx.showToast({
+        title: error.message || '藏品信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+    }
+  },
+
+  async openPendingStageExpenseDraft() {
+    const draft = wx.getStorageSync(PENDING_STAGE_DRAFT_KEY);
+    if (!draft || !draft.stageId) {
+      return;
+    }
+    wx.removeStorageSync(PENDING_STAGE_DRAFT_KEY);
+
+    if (Date.now() - Number(draft.createdAt || 0) > PENDING_COLLECTION_DRAFT_MAX_AGE) {
+      wx.showToast({
+        title: '场次信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+      return;
+    }
+
+    try {
+      const meetStages = await this.loadMeetStages();
+      let stage = (meetStages || []).find((item) => item.stageId === draft.stageId);
+      if (!stage) {
+        await stageService.ensureStagesLoaded();
+        const cached = stageService.getStageById(draft.stageId);
+        if (cached) {
+          stage = {
+            stageId: cached.stageId,
+            stageName: cached.stageName,
+            stageType: inferMeetStageType(cached),
+            date: cached.date,
+            city: cached.cityName || cached.city || '',
+            venue: cached.venueName || cached.venue || '',
+            location: cached.venueName || cached.location || '',
+            priceTiers: cached.priceTiers || []
+          };
+        }
+      }
+      if (!stage) {
+        throw new Error('场次信息加载失败，请重新尝试');
+      }
+      this.openStageExpenseDraft(stage);
+    } catch (error) {
+      wx.showToast({
+        title: error.message || '场次信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+    }
+  },
+
   handleKeywordInput(event) {
+    const nextKeyword = this.limitPlainText(
+      event.detail.value,
+      this.data.keyword,
+      MAX_SEARCH_LENGTH,
+      '\u641c\u7d22\u5173\u952e\u8bcd'
+    );
     this.setData({
-      keyword: event.detail.value
+      keyword: nextKeyword
     });
     this.refreshPage();
+    return nextKeyword;
   },
 
   handleFilterCategoryChange(event) {
@@ -333,6 +442,94 @@ Page({
       stageDateLabels: [],
       stageDateIndex: 0
     });
+  },
+
+  openCollectionExpenseDraft(collection) {
+    const categoryIndex = Math.max(
+      this.data.categories.findIndex((item) => item.id === 'collection'),
+      0
+    );
+    const category = this.data.categories[categoryIndex];
+    const subType = expenseService.inferCollectionSubType(collection);
+    const subTypeIndex = Math.max(
+      (category.subTypes || []).findIndex((item) => item.id === subType),
+      0
+    );
+    const referencePrice = collection.referencePrice === null ||
+      typeof collection.referencePrice === 'undefined'
+        ? ''
+        : String(collection.referencePrice);
+
+    this.applyFormState({
+      formVisible: true,
+      formMode: 'create',
+      formTitle: '新增消费记录',
+      formData: {
+        ...createDefaultFormData(),
+        category: 'collection',
+        subType: (category.subTypes[subTypeIndex] || {}).id || subType,
+        itemName: collection.collectionName || '',
+        amount: referencePrice,
+        quantity: 1,
+        date: this.getToday(),
+        collectionId: collection.collectionId || '',
+        referencePrice,
+        unitPrice: referencePrice,
+        expenseSource: 'collection',
+        purchaseChannel: 'official',
+        pricingMode: 'official_unit'
+      },
+      categoryIndex,
+      subTypeIndex,
+      paymentMethodIndex: 0,
+      purchaseChannelIndex: 0,
+      pricingModeIndex: 0,
+      searchKeyword: collection.collectionName || '',
+      meetSearchKeyword: '',
+      collectionSearchKeyword: collection.collectionName || '',
+      selectedCollectionMeta: [buildCollectionDetailText(collection), buildCollectionPriceText(collection)]
+        .filter(Boolean)
+        .join(' 路 '),
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
+    });
+  },
+
+  openStageExpenseDraft(stage) {
+    const categoryIndex = Math.max(
+      this.data.categories.findIndex((item) => item.id === 'meet'),
+      0
+    );
+    const formData = {
+      ...createDefaultFormData(),
+      category: 'meet',
+      subType: inferMeetStageType(stage),
+      date: this.getToday(),
+      purchaseChannel: 'official',
+      pricingMode: 'official_unit'
+    };
+    this.applyFormState({
+      formVisible: true,
+      formMode: 'create',
+      formTitle: '新增消费记录',
+      formData,
+      categoryIndex,
+      subTypeIndex: 0,
+      paymentMethodIndex: 0,
+      purchaseChannelIndex: 0,
+      pricingModeIndex: 0,
+      searchKeyword: '',
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
+    });
+    this.applySelectedMeetStage(stage);
   },
 
   async handleOpenEdit(event) {
@@ -463,6 +660,9 @@ Page({
   },
 
   handleCloseForm() {
+    if (this.data.formSubmitting) {
+      return;
+    }
     this.setData({
       formVisible: false
     });
@@ -470,9 +670,11 @@ Page({
 
   handleFormInput(event) {
     const field = event.currentTarget.dataset.field;
+    const value = this.sanitizeFormInput(field, event.detail.value);
     this.setData({
-      [`formData.${field}`]: event.detail.value
+      [`formData.${field}`]: value
     });
+    return value;
   },
 
   handleCategoryChange(event) {
@@ -556,8 +758,13 @@ Page({
     const purchaseChannelIndex = Number(event.detail.value);
     const purchaseChannel = this.data.purchaseChannels[purchaseChannelIndex];
     const isMeet = this.data.formData.category === 'meet';
+    const isCollection = this.data.formData.category === 'collection';
     const hasPriceTier = this.data.priceTiers.length > 0;
-    const pricingMode = isMeet && purchaseChannel.id === 'official' && hasPriceTier ? 'official_unit' : 'total';
+    const pricingMode =
+      (isMeet && purchaseChannel.id === 'official' && hasPriceTier) ||
+      (isCollection && purchaseChannel.id === 'official')
+        ? 'official_unit'
+        : 'total';
     const pricingModeIndex = Math.max(
       this.data.pricingModes.findIndex((item) => item.id === pricingMode),
       0
@@ -567,7 +774,12 @@ Page({
       pricingModeIndex,
       'formData.purchaseChannel': purchaseChannel.id,
       'formData.pricingMode': pricingMode,
-      'formData.amount': isMeet && purchaseChannel.id === 'official' && hasPriceTier ? this.data.formData.priceTier : ''
+      'formData.amount':
+        isMeet && purchaseChannel.id === 'official' && hasPriceTier
+          ? this.data.formData.priceTier
+          : isCollection && purchaseChannel.id === 'official'
+            ? this.data.formData.referencePrice || this.data.formData.amount
+            : ''
     });
   },
 
@@ -704,9 +916,18 @@ Page({
       typeof event.detail.value !== 'undefined'
         ? String(event.detail.value)
         : '';
-    const searchKeyword = rawValue === 'undefined' ? '' : rawValue;
     const category = this.data.formData.category;
     const searchType = event.currentTarget.dataset.searchType || category;
+    const previousSearchKeyword =
+      searchType === 'collection' ? this.data.collectionSearchKeyword : this.data.meetSearchKeyword;
+    const searchKeyword = rawValue === 'undefined'
+      ? ''
+      : this.limitPlainText(
+          rawValue,
+          previousSearchKeyword,
+          MAX_SEARCH_LENGTH,
+          '\u641c\u7d22\u5173\u952e\u8bcd'
+        );
     if (searchType === 'meet') {
       this.setData({
         searchKeyword,
@@ -818,31 +1039,37 @@ Page({
       if (!item) {
         return;
       }
+      const categoryIndex = Math.max(
+        this.data.categories.findIndex((candidate) => candidate.id === 'collection'),
+        0
+      );
+      const category = this.data.categories[categoryIndex];
+      const subType = expenseService.inferCollectionSubType(item);
+      const subTypeIndex = Math.max(
+        (category.subTypes || []).findIndex((candidate) => candidate.id === subType),
+        0
+      );
       const referencePrice = item.referencePrice === null || typeof item.referencePrice === 'undefined'
         ? ''
         : String(item.referencePrice);
-      const pricingMode = referencePrice ? 'official_unit' : 'direct';
-      const pricingModeIndex = Math.max(
-        this.data.pricingModes.findIndex((mode) => mode.id === pricingMode),
-        0
-      );
       this.setData({
+        categoryIndex,
+        subTypes: category.subTypes || [],
+        subTypeIndex,
+        'formData.category': 'collection',
+        'formData.subType': (category.subTypes[subTypeIndex] || {}).id || subType,
         'formData.collectionId': item.collectionId,
         'formData.itemName': item.collectionName,
         'formData.referencePrice': referencePrice,
         'formData.amount': referencePrice,
         'formData.unitPrice': referencePrice,
-        'formData.purchaseChannel': referencePrice ? 'official' : 'none',
-        'formData.pricingMode': pricingMode,
         'formData.expenseSource': 'collection',
         searchKeyword: item.collectionName || '',
         collectionSearchKeyword: item.collectionName || '',
         selectedCollectionMeta: [buildCollectionDetailText(item), buildCollectionPriceText(item)]
           .filter(Boolean)
           .join(' · '),
-        searchResults: [],
-        purchaseChannelIndex: referencePrice ? 0 : 1,
-        pricingModeIndex
+        searchResults: []
       });
       return;
     }
@@ -850,31 +1077,42 @@ Page({
   },
 
   async handleSubmitForm() {
-    const result =
-      this.data.formMode === 'edit'
-        ? await expenseService.updateExpenseAsync(this.data.formData.expenseId, this.data.formData)
-        : await expenseService.addExpenseAsync(this.data.formData);
-
-    if (!result.valid) {
-      wx.showToast({
-        title: result.message,
-        icon: 'none'
-      });
+    if (this.data.formSubmitting) {
       return;
     }
 
-    wx.showToast({
-      title: this.data.formMode === 'edit' ? '已保存' : '已新增',
-      icon: 'success'
-    });
-    this.setData({
-      formVisible: false
-    });
-    this.refreshPage();
+    this.setData({ formSubmitting: true });
+
+    try {
+      const result =
+        this.data.formMode === 'edit'
+          ? await expenseService.updateExpenseAsync(this.data.formData.expenseId, this.data.formData)
+          : await expenseService.addExpenseAsync(this.data.formData);
+
+      if (!result.valid) {
+        wx.showToast({
+          title: result.message,
+          icon: 'none'
+        });
+        return;
+      }
+
+      wx.showToast({
+        title: this.data.formMode === 'edit' ? '已保存' : '已新增',
+        icon: 'success'
+      });
+      this.setData({
+        formVisible: false
+      });
+      this.refreshPage();
+    } finally {
+      this.setData({ formSubmitting: false });
+    }
   },
 
   handleDeleteExpense(event) {
     const expenseId = event.currentTarget.dataset.id;
+    const expense = this.data.expenses.find((item) => item.expenseId === expenseId) || null;
     wx.showModal({
       title: '删除消费记录',
       content: '删除后无法在本地恢复，确定要删除吗？',
@@ -885,7 +1123,7 @@ Page({
           return;
         }
         try {
-          await expenseService.removeExpenseAsync(expenseId);
+          await expenseService.removeExpenseAsync(expenseId, expense);
           wx.showToast({
             title: '已删除',
             icon: 'success'
@@ -899,6 +1137,82 @@ Page({
         }
       }
     });
+  },
+
+  showInputLimitToast(title) {
+    const now = Date.now();
+    if (now - (this.inputLimitToastAt || 0) < 1200) {
+      return;
+    }
+    this.inputLimitToastAt = now;
+    wx.showToast({
+      title,
+      icon: 'none'
+    });
+  },
+
+  limitPlainText(value, previousValue, maxLength, fieldName) {
+    const nextValue = String(value || '');
+    if (nextValue.length <= maxLength) {
+      return nextValue;
+    }
+    this.showInputLimitToast(`${fieldName}\u4e0a\u9650\u4e3a ${maxLength} \u4e2a\u5b57`);
+    return String(previousValue || '');
+  },
+
+  sanitizeAmountInput(value, previousValue) {
+    const nextValue = String(value || '');
+    const previous = String(previousValue || '');
+    if (!nextValue) {
+      return '';
+    }
+    if (!/^\d*(\.\d{0,2})?$/.test(nextValue)) {
+      this.showInputLimitToast('\u91d1\u989d\u6700\u591a\u4fdd\u7559 2 \u4f4d\u5c0f\u6570');
+      return previous;
+    }
+    const amount = Number(nextValue);
+    if (Number.isFinite(amount) && amount > MAX_AMOUNT) {
+      this.showInputLimitToast(`\u91d1\u989d\u4e0a\u9650\u4e3a ${MAX_AMOUNT}`);
+      return previous;
+    }
+    return nextValue;
+  },
+
+  sanitizeQuantityInput(value, previousValue) {
+    const nextValue = String(value || '');
+    const previous = String(previousValue || '');
+    if (!nextValue) {
+      return '';
+    }
+    if (!/^\d+$/.test(nextValue)) {
+      this.showInputLimitToast('\u6570\u91cf\u53ea\u80fd\u586b\u5199\u6574\u6570');
+      return previous;
+    }
+    const quantity = Number(nextValue);
+    if (quantity > MAX_COLLECTION_QUANTITY) {
+      this.showInputLimitToast(`\u85cf\u54c1\u6570\u91cf\u4e0a\u9650\u4e3a ${MAX_COLLECTION_QUANTITY}`);
+      return previous;
+    }
+    return nextValue;
+  },
+
+  sanitizeFormInput(field, value) {
+    const previousValue = this.data.formData[field];
+    if (field === 'amount') {
+      return this.sanitizeAmountInput(value, previousValue);
+    }
+    if (field === 'quantity') {
+      return this.sanitizeQuantityInput(value, previousValue);
+    }
+    if (TEXT_FIELD_LIMITS[field]) {
+      return this.limitPlainText(
+        value,
+        previousValue,
+        TEXT_FIELD_LIMITS[field],
+        TEXT_FIELD_NAMES[field] || field
+      );
+    }
+    return value;
   },
 
   noop() {},

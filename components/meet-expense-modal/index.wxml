@@ -2,7 +2,7 @@
   <view class="modal-panel" catchtap="noop">
     <view class="row modal-header">
       <text class="card-title">{{formTitle}}</text>
-      <view class="close-button" bindtap="handleClose">×</view>
+      <view class="close-button" bindtap="handleClose">x</view>
     </view>
 
     <view class="field-grid">
@@ -38,18 +38,21 @@
     <view class="form-section">
       <text class="section-title">{{subTypes[subTypeIndex].name}}场次</text>
       <text class="muted">见面日期用于匹配舞台场次，消费日期只记录这笔钱发生的日期。</text>
+
       <view class="form-field">
         <text class="field-label">见面日期</text>
         <picker mode="date" value="{{formData.stageDate}}" bindchange="handleMeetDateChange">
           <view class="picker-field">{{formData.stageDate || '请选择见面日期'}}</view>
         </picker>
       </view>
+
       <view class="form-field">
         <text class="field-label">{{subTypes[subTypeIndex].name}}名称</text>
         <input
           class="form-input {{matchedMeetStageName ? '' : 'input-hint'}}"
           value="{{searchKeyword}}"
-          placeholder="{{matchedMeetStageName ? '搜索云端演唱会名称' : '当前见面日期暂无匹配场次，可搜索名称'}}"
+          maxlength="40"
+          placeholder="{{matchedMeetStageName ? '搜索云端演出名称' : '当前见面日期暂无匹配场次，可搜索名称'}}"
           confirm-type="search"
           bindinput="handleItemSearchInput"
         />
@@ -60,51 +63,57 @@
           <text class="muted">{{item.displayMeta}}</text>
         </view>
       </view>
+
       <view class="form-field" wx:if="{{stageDateOptions.length}}">
         <text class="field-label">见面日期选项</text>
         <picker mode="selector" range="{{stageDateLabels}}" value="{{stageDateIndex}}" bindchange="handleStageDateOptionChange">
           <view class="picker-field">{{stageDateLabels[stageDateIndex]}}</view>
         </picker>
       </view>
+
       <view class="form-field">
         <text class="field-label">已选名称</text>
-        <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="可手动填写名称" bindinput="handleFormInput" />
+        <input class="form-input" value="{{formData.itemName}}" maxlength="80" data-field="itemName" placeholder="可手动填写名称" bindinput="handleFormInput" />
       </view>
+
       <view class="form-field">
         <text class="field-label">购买渠道</text>
         <picker mode="selector" range="{{purchaseChannels}}" range-key="name" value="{{purchaseChannelIndex}}" bindchange="handlePurchaseChannelChange">
           <view class="picker-field">{{purchaseChannels[purchaseChannelIndex].name}}</view>
         </picker>
       </view>
+
       <view class="form-field" wx:if="{{formData.purchaseChannel === 'official' && priceTierLabels.length}}">
         <text class="field-label">金额档位</text>
         <picker mode="selector" range="{{priceTierLabels}}" value="{{priceTierIndex}}" bindchange="handlePriceTierChange">
           <view class="picker-field">{{priceTierLabels.length ? priceTierLabels[priceTierIndex] : '暂无档位'}}</view>
         </picker>
       </view>
+
       <view class="form-field" wx:if="{{formData.purchaseChannel === 'other' || !priceTierLabels.length}}">
         <text class="field-label">实际总金额</text>
-        <input class="form-input" type="digit" value="{{formData.amount}}" data-field="amount" placeholder="0.00" bindinput="handleFormInput" />
+        <input class="form-input" type="digit" inputmode="decimal" value="{{formData.amount}}" data-field="amount" placeholder="0.00" bindinput="handleFormInput" />
       </view>
+
       <view class="field-grid">
         <view class="form-field">
           <text class="field-label">城市（选填）</text>
-          <input class="form-input" value="{{formData.city}}" data-field="city" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
+          <input class="form-input" value="{{formData.city}}" maxlength="120" data-field="city" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
         </view>
         <view class="form-field">
           <text class="field-label">地点（选填）</text>
-          <input class="form-input" value="{{formData.location}}" data-field="location" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
+          <input class="form-input" value="{{formData.location}}" maxlength="120" data-field="location" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
         </view>
         <view class="form-field">
           <text class="field-label">座位（选填）</text>
-          <input class="form-input" value="{{formData.seat}}" data-field="seat" placeholder="例如：A区 12排 08座" bindinput="handleFormInput" />
+          <input class="form-input" value="{{formData.seat}}" maxlength="120" data-field="seat" placeholder="例如：A区 12排 08座" bindinput="handleFormInput" />
         </view>
       </view>
     </view>
 
     <view class="form-field">
       <text class="field-label">备注</text>
-      <input class="form-input" value="{{formData.remark}}" data-field="remark" placeholder="选填，例如购买渠道、票务来源、追星感受" bindinput="handleFormInput" />
+      <input class="form-input" value="{{formData.remark}}" maxlength="160" data-field="remark" placeholder="选填，例如购买渠道、票务来源、追星感受" bindinput="handleFormInput" />
     </view>
 
     <view class="switch-row">

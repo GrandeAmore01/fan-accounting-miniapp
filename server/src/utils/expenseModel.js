@@ -6,6 +6,10 @@ const VALID_CATEGORIES = [
   'accommodation',
   'other'
 ];
+const MAX_NAME_LENGTH = 80;
+const MAX_TEXT_LENGTH = 120;
+const MAX_REMARK_LENGTH = 160;
+const MAX_COLLECTION_QUANTITY = 100;
 
 function toNumber(value) {
   return Number(value || 0);
@@ -116,6 +120,19 @@ function validateExpense(expense) {
   if (expense.category === 'meet' && !expense.stageDate) {
     return { valid: false, message: '请选择见面日期' };
   }
+  if (String(expense.itemName || '').length > MAX_NAME_LENGTH) {
+    return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
+  }
+  if (String(expense.remark || '').length > MAX_REMARK_LENGTH) {
+    return { valid: false, message: `备注上限为 ${MAX_REMARK_LENGTH} 个字` };
+  }
+  if (
+    String(expense.city || '').length > MAX_TEXT_LENGTH ||
+    String(expense.location || '').length > MAX_TEXT_LENGTH ||
+    String(expense.seat || '').length > MAX_TEXT_LENGTH
+  ) {
+    return { valid: false, message: `城市、地点或座位上限为 ${MAX_TEXT_LENGTH} 个字` };
+  }
   if (!expense.amount || expense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };
   }
@@ -141,11 +158,11 @@ function validateExpense(expense) {
     expense.category === 'collection' &&
     (!Number.isInteger(expense.quantity) ||
       expense.quantity < 1 ||
-      expense.quantity > 10)
+      expense.quantity > MAX_COLLECTION_QUANTITY)
   ) {
     return {
       valid: false,
-      message: '藏品数量必须是1至10之间的整数'
+      message: `藏品数量必须是 1 到 ${MAX_COLLECTION_QUANTITY} 之间的整数`
     };
   }
   return { valid: true };
