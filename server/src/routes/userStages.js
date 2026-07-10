@@ -88,7 +88,6 @@ router.post('/unlight', async (req, res, next) => {
   try {
     requireFields(req.body, ['userId', 'stageId']);
     const { userId, stageId } = req.body;
-    const clearExpense = req.body.clearExpense !== false;
 
     await pool.execute(
       `INSERT INTO user_stages (
@@ -97,9 +96,14 @@ router.post('/unlight', async (req, res, next) => {
        ON DUPLICATE KEY UPDATE
          is_lighted = 0,
          light_time = NULL,
-         expense_id = CASE WHEN ? THEN '' ELSE expense_id END,
+         expense_id = '',
          actual_ticket_price = 0`,
-      [userId, stageId, clearExpense]
+      [userId, stageId]
+    );
+
+    await pool.execute(
+      `DELETE FROM stage_notes WHERE user_id = ? AND stage_id = ?`,
+      [userId, stageId]
     );
 
     res.json({

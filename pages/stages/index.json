@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "舞台记录"
+  "navigationBarTitleText": "舞台记录",
+  "usingComponents": {
+    "meet-expense-modal": "/components/meet-expense-modal/index"
+  }
 }

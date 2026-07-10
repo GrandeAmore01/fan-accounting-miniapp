@@ -104,34 +104,6 @@
   font-size: 24rpx;
 }
 
-.photo-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12rpx;
-}
-
-.photo-item,
-.photo-add {
-  width: 100%;
-  height: 200rpx;
-  border-radius: 12rpx;
-  background: #fff7da;
-}
-
-.photo-add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1rpx dashed #dbc26d;
-  color: #b48a00;
-  font-size: 56rpx;
-}
-
-.photo-tip {
-  display: block;
-  margin-top: 12rpx;
-}
-
 .card .primary-button {
   margin-top: 20rpx;
 }

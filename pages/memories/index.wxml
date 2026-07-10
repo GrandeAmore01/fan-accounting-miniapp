@@ -72,34 +72,6 @@
     </view>
   </view>
 
-  <view class="memory-card">
-    <view class="section-head">
-      <text class="section-title">回忆图片墙</text>
-      <text class="section-hint">按场次汇总</text>
-    </view>
-    <view wx:if="{{!photoWall.hasPhotos}}" class="empty">还没有回忆照片，去舞台详情页上传现场照片吧。</view>
-    <view class="photo-wall-group" wx:for="{{photoWall.groups}}" wx:for-index="groupIndex" wx:key="stageId">
-      <view class="row" data-id="{{item.stageId}}" bindtap="handleOpenDetail">
-        <text class="song-name">{{item.stageName}}</text>
-        <text class="muted">{{item.date}} · {{item.city}}</text>
-      </view>
-      <view class="photo-grid">
-        <image
-          wx:for="{{item.photos}}"
-          wx:for-item="photo"
-          wx:for-index="photoIndex"
-          wx:key="*this"
-          class="photo-thumb"
-          src="{{photo}}"
-          mode="aspectFill"
-          data-group-index="{{groupIndex}}"
-          data-photo-index="{{photoIndex}}"
-          bindtap="handlePreviewPhoto"
-        />
-      </view>
-    </view>
-  </view>
-
   <view class="memory-card intro-card">
     <text class="memory-eyebrow">见面记忆</text>
     <block wx:if="{{report.hasRecords}}">
@@ -130,7 +102,7 @@
     </view>
     <view wx:if="{{companions.length === 0}}" class="empty">还没有同行人记录，请先在舞台详情页的观演备注中填写同行人。</view>
     <view class="rank-item" wx:for="{{companions}}" wx:key="name" data-name="{{item.name}}" bindtap="handleCompanionTap">
-      <text class="rank-badge">{{item.count}}</text>
+      <text class="rank-badge">{{item.rank}}</text>
       <text class="rank-name">{{item.name}} · {{item.count}} 场</text>
     </view>
     <view wx:if="{{activeCompanion}}" class="companion-detail">
