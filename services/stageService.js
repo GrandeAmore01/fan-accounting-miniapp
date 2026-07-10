@@ -4,11 +4,188 @@ const apiService = require('./apiService');
 const config = require('./config');
 
 const USER_ID = config.userId || 'local-user';
-const MAX_PHOTOS = 9;
+const STAGE_API_BASE_URL = config.stageApiBaseUrl || config.apiBaseUrl;
+const COUNTDOWN_PLACEHOLDER_STAGE_ID = 'stage_countdown_placeholder';
+
+const COUNTDOWN_PLACEHOLDER_STAGE = {
+  stageId: COUNTDOWN_PLACEHOLDER_STAGE_ID,
+  stageName: '下一见面（待定场次）',
+  stageType: 'concert',
+  year: 2026,
+  date: '2026-12-31',
+  city: '待定',
+  venue: '待定场馆',
+  location: '待定',
+  albumId: '',
+  albumName: '未关联专辑',
+  albumNameCn: '未关联专辑',
+  songList: [],
+  songs: [],
+  songCount: 0,
+  songListText: '',
+  songPreviewText: '',
+  priceTiers: [],
+  priceTierText: '待定',
+  cityName: '待定',
+  venueName: '待定场馆',
+  isOnline: false,
+  ticketPrice: 0,
+  description: '用于展示距离下次见面的倒计时',
+  stageTypeName: '演唱会',
+  isCountdownPlaceholder: true
+};
+
+function getStageMeetCategory(stage) {
+  const name = `${(stage && stage.stageName) || ''}${(stage && stage.description) || ''}`;
+  if (name.indexOf('新年音乐会') >= 0 || name.indexOf('运动会') >= 0) {
+    return 'special';
+  }
+  return 'concert';
+}
+
+function getMeetCategoryName(category) {
+  return category === 'special' ? '运动会/新年音乐会' : '演唱会';
+}
+
+function getStageTypeName(stage) {
+  const name = `${(stage && stage.stageName) || ''}${(stage && stage.description) || ''}`;
+  if (name.indexOf('新年音乐会') >= 0) {
+    return '新年音乐会';
+  }
+  if (name.indexOf('运动会') >= 0) {
+    return '运动会';
+  }
+  if (stage && stage.stageType === 'festival') {
+    return '音乐节/拼盘';
+  }
+  return '演唱会';
+}
+
+function inferExpenseSubType(stage) {
+  const name = `${(stage && stage.stageName) || ''}${(stage && stage.description) || ''}`;
+  if (name.indexOf('新年音乐会') >= 0) {
+    return 'new_year_concert';
+  }
+  if (name.indexOf('运动会') >= 0) {
+    return 'sports_day';
+  }
+  return 'concert';
+}
+
+function matchesMeetCategory(stage, category) {
+  if (!category || category === 'all') {
+    return true;
+  }
+  return getStageMeetCategory(stage) === category;
+}
 
 let stageCache = [];
 let albumLibrary = [];
 let stageLoadPromise = null;
+let userStateByStageId = {};
+let noteByStageId = {};
+let expenseListCache = null;
+
+function requestStageApi(options) {
+  return apiService.request({
+    ...options,
+    baseUrl: STAGE_API_BASE_URL
+  });
+}
+
+function getUserStageState(stageId) {
+  return userStateByStageId[stageId] || null;
+}
+
+function getUserStageNotesList() {
+  return Object.keys(noteByStageId).map((stageId) => noteByStageId[stageId]);
+}
+
+function setUserStageState(stageId, state = {}) {
+  userStateByStageId[stageId] = {
+    stageId,
+    isLighted: Boolean(state.isLighted),
+    lightTime: state.lightTime || '',
+    expenseId: state.expenseId || '',
+    actualTicketPrice: Number(state.actualTicketPrice || 0)
+  };
+}
+
+function setStageNoteState(stageId, note = {}) {
+  noteByStageId[stageId] = {
+    stageId,
+    seat: note.seat || '',
+    companions: note.companions || '',
+    note: note.note || '',
+    actualTicketPrice: Number(note.actualTicketPrice || 0)
+  };
+}
+
+function hydrateUserStateFromLocal() {
+  userStateByStageId = {};
+  noteByStageId = {};
+  storageService.getCollection(USER_ID, 'userStages').forEach((item) => {
+    setUserStageState(item.stageId, item);
+  });
+  storageService.getCollection(USER_ID, 'stageNotes').forEach((item) => {
+    setStageNoteState(item.stageId, item);
+  });
+}
+
+async function loadUserStateFromCloud() {
+  if (!config.useStageBackend) {
+    hydrateUserStateFromLocal();
+    return;
+  }
+  try {
+    const [userStages, stageNotes] = await Promise.all([
+      requestStageApi({
+        url: `/user-stages${apiService.buildQuery({ userId: USER_ID })}`
+      }),
+      requestStageApi({
+        url: `/stage-notes${apiService.buildQuery({ userId: USER_ID })}`
+      })
+    ]);
+    userStateByStageId = {};
+    noteByStageId = {};
+    (userStages || []).forEach((item) => {
+      setUserStageState(item.stageId, item);
+    });
+    (stageNotes || []).forEach((item) => {
+      const userState = getUserStageState(item.stageId);
+      setStageNoteState(item.stageId, {
+        ...item,
+        actualTicketPrice: userState ? userState.actualTicketPrice : 0
+      });
+    });
+  } catch (error) {
+    console.warn('舞台用户状态 API 加载失败', error);
+    userStateByStageId = {};
+    noteByStageId = {};
+  }
+}
+
+async function loadExpenseCache() {
+  const expenseService = require('./expenseService');
+  if (!config.useBackend) {
+    expenseListCache = expenseService.listExpenses();
+    return;
+  }
+  try {
+    expenseListCache = await expenseService.listExpensesAsync();
+  } catch (error) {
+    console.warn('消费记录加载失败，回退本地数据', error);
+    expenseListCache = expenseService.listExpenses();
+  }
+}
+
+function getExpenseList() {
+  if (expenseListCache) {
+    return expenseListCache;
+  }
+  const expenseService = require('./expenseService');
+  return expenseService.listExpenses();
+}
 
 function normalizeLocalStage(item) {
   const songList = item.songList || [];
@@ -31,7 +208,7 @@ function normalizeLocalStage(item) {
     isOnline: Boolean(item.isOnline),
     ticketPrice: Number(item.ticketPrice || 0),
     description: item.description || '',
-    stageTypeName: item.stageType === 'festival' ? '音乐节/拼盘' : '演唱会'
+    stageTypeName: getStageTypeName(item)
   };
 }
 
@@ -67,9 +244,10 @@ function buildAlbumLibraryFromStages(stages) {
 async function loadStageData() {
   if (config.useStageBackend) {
     try {
-      const data = await apiService.request({ url: '/stages' });
+      const data = await requestStageApi({ url: '/stages' });
       stageCache = (data.stages || []).map((item) => ({ ...item }));
       albumLibrary = data.albums || buildAlbumLibraryFromStages(stageCache);
+      injectCountdownPlaceholderStage();
       pruneOrphanLocalData();
       return stageCache;
     } catch (error) {
@@ -78,8 +256,16 @@ async function loadStageData() {
   }
   stageCache = localStages.map(normalizeLocalStage);
   albumLibrary = buildAlbumLibraryFromStages(stageCache);
+  injectCountdownPlaceholderStage();
   pruneOrphanLocalData();
   return stageCache;
+}
+
+function injectCountdownPlaceholderStage() {
+  if (stageCache.some((item) => item.stageId === COUNTDOWN_PLACEHOLDER_STAGE_ID)) {
+    return;
+  }
+  stageCache.push({ ...COUNTDOWN_PLACEHOLDER_STAGE });
 }
 
 function pruneOrphanLocalData() {
@@ -100,11 +286,15 @@ function pruneOrphanLocalData() {
 }
 
 function ensureStagesLoaded() {
-  if (stageCache.length) {
-    return Promise.resolve(stageCache);
-  }
   if (!stageLoadPromise) {
-    stageLoadPromise = loadStageData().finally(() => {
+    stageLoadPromise = (async () => {
+      if (!stageCache.length) {
+        await loadStageData();
+      }
+      await loadUserStateFromCloud();
+      await loadExpenseCache();
+      return stageCache;
+    })().finally(() => {
       stageLoadPromise = null;
     });
   }
@@ -112,6 +302,9 @@ function ensureStagesLoaded() {
 }
 
 function getStageNotes() {
+  if (config.useStageBackend) {
+    return getUserStageNotesList();
+  }
   return storageService.getCollection(USER_ID, 'stageNotes');
 }
 
@@ -164,53 +357,135 @@ function promptManualPrice(callbacks = {}) {
   });
 }
 
-function getStageNote(stageId) {
-  return getStageNotes().find((item) => item.stageId === stageId) || {
+function persistUserStageStateLocal(stageId, isLighted, options = {}) {
+  const userStages = storageService.getCollection(USER_ID, 'userStages');
+  const exists = userStages.find((item) => item.stageId === stageId);
+  if (exists) {
+    exists.isLighted = isLighted;
+    exists.lightTime = isLighted ? exists.lightTime || new Date().toISOString() : '';
+    if (!isLighted) {
+      exists.expenseId = '';
+    }
+  } else {
+    userStages.push({
+      userId: USER_ID,
+      stageId,
+      isLighted,
+      lightTime: isLighted ? new Date().toISOString() : '',
+      expenseId: ''
+    });
+  }
+  storageService.setCollection(USER_ID, 'userStages', userStages);
+  const previous = exists || {};
+  setUserStageState(stageId, {
     stageId,
-    seat: '',
-    companions: '',
-    note: '',
-    actualTicketPrice: 0,
-    photos: []
-  };
+    isLighted,
+    lightTime: isLighted ? previous.lightTime || new Date().toISOString() : '',
+    expenseId: isLighted ? previous.expenseId || '' : '',
+    actualTicketPrice: isLighted ? Number(previous.actualTicketPrice || 0) : 0
+  });
 }
 
-function saveStageNote(stageId, payload = {}) {
-  const priceResult = normalizeActualTicketPrice(payload.actualTicketPrice);
-  if (!priceResult.valid) {
-    return priceResult;
-  }
-  const notes = getStageNotes();
+function persistStageNoteLocal(stageId, nextNote) {
+  const notes = storageService.getCollection(USER_ID, 'stageNotes');
   const exists = notes.find((item) => item.stageId === stageId);
-  const nextNote = {
-    stageId,
-    seat: payload.seat || '',
-    companions: payload.companions || '',
-    note: payload.note || '',
-    actualTicketPrice: priceResult.value,
-    photos: Array.isArray(payload.photos) ? payload.photos.slice(0, MAX_PHOTOS) : []
-  };
   if (exists) {
     Object.assign(exists, nextNote);
   } else {
     notes.push(nextNote);
   }
   saveStageNotes(notes);
+  setStageNoteState(stageId, nextNote);
+}
+
+async function clearStageNote(stageId) {
+  delete noteByStageId[stageId];
+  const notes = storageService.getCollection(USER_ID, 'stageNotes');
+  const filtered = notes.filter((item) => item.stageId !== stageId);
+  if (filtered.length !== notes.length) {
+    saveStageNotes(filtered);
+  }
+  if (!config.useStageBackend) {
+    return;
+  }
+  try {
+    await requestStageApi({
+      url: `/stage-notes/${stageId}`,
+      method: 'PUT',
+      data: {
+        userId: USER_ID,
+        seat: '',
+        companions: '',
+        note: '',
+        actualTicketPrice: 0,
+        photos: []
+      }
+    });
+  } catch (error) {
+    console.warn('清空观演备注失败', error);
+  }
+}
+
+function getStageNote(stageId) {
+  const note = noteByStageId[stageId] || getStageNotes().find((item) => item.stageId === stageId);
+  const userState = getUserStageState(stageId);
+  if (note) {
+    return {
+      ...note,
+      actualTicketPrice: Number(
+        (userState && userState.actualTicketPrice) || note.actualTicketPrice || 0
+      )
+    };
+  }
+  return {
+    stageId,
+    seat: '',
+    companions: '',
+    note: '',
+    actualTicketPrice: userState ? Number(userState.actualTicketPrice || 0) : 0
+  };
+}
+
+async function saveStageNote(stageId, payload = {}) {
+  const priceResult = normalizeActualTicketPrice(payload.actualTicketPrice);
+  if (!priceResult.valid) {
+    return priceResult;
+  }
+  const nextNote = {
+    stageId,
+    seat: payload.seat || '',
+    companions: payload.companions || '',
+    note: payload.note || '',
+    actualTicketPrice: priceResult.value,
+    photos: []
+  };
+
+  if (config.useStageBackend) {
+    try {
+      await requestStageApi({
+        url: `/stage-notes/${stageId}`,
+        method: 'PUT',
+        data: {
+          userId: USER_ID,
+          ...nextNote
+        }
+      });
+      setStageNoteState(stageId, nextNote);
+      if (priceResult.value > 0) {
+        const userState = getUserStageState(stageId) || { stageId };
+        setUserStageState(stageId, {
+          ...userState,
+          actualTicketPrice: priceResult.value
+        });
+      }
+      return { valid: true, data: nextNote };
+    } catch (error) {
+      return { valid: false, message: error.message || '备注保存失败' };
+    }
+  }
+
+  persistStageNoteLocal(stageId, nextNote);
   return { valid: true, data: nextNote };
-}
-
-function addStagePhotos(stageId, photoPaths = []) {
-  const note = getStageNote(stageId);
-  const merged = [...(note.photos || []), ...photoPaths].slice(0, MAX_PHOTOS);
-  return saveStageNote(stageId, { ...note, photos: merged });
-}
-
-function removeStagePhoto(stageId, photoPath) {
-  const note = getStageNote(stageId);
-  return saveStageNote(stageId, {
-    ...note,
-    photos: (note.photos || []).filter((item) => item !== photoPath)
-  });
 }
 
 function getValidPriceTiers(stageOrTiers) {
@@ -249,6 +524,23 @@ function getStageAlbumNames(stage) {
     return [stage.albumName];
   }
   return [];
+}
+
+function formatAlbumNamesText(stage, albumNames = []) {
+  const uniqueNames = Array.from(new Set(albumNames.filter(Boolean)));
+  if (!uniqueNames.length) {
+    return '未关联专辑';
+  }
+  const songAlbumIds = new Set(
+    (stage.songs || []).map((song) => song.albumId).filter(Boolean)
+  );
+  if (uniqueNames.length >= 3) {
+    return `${uniqueNames.slice(0, 3).join('、')}等`;
+  }
+  if (songAlbumIds.size > uniqueNames.length) {
+    return `${uniqueNames.join('、')}等`;
+  }
+  return uniqueNames.join('、');
 }
 
 const MAX_ACTION_SHEET_ITEMS = 6;
@@ -328,24 +620,19 @@ function getStatsYearOptions() {
 }
 
 function enrichStage(item) {
-  const userStages = storageService.getCollection(USER_ID, 'userStages');
-  const userState = userStages.find((state) => state.stageId === item.stageId);
-  const note = getStageNote(item.stageId);
-  const photos = note.photos || [];
+  const userState = getUserStageState(item.stageId);
   const albumNames = getStageAlbumNames(item);
   const validPriceTiers = getValidPriceTiers(item);
   return {
     ...item,
     albumNames,
-    albumNamesText: albumNames.length > 0 ? albumNames.join('、') : '未关联专辑',
+    albumNamesText: formatAlbumNamesText(item, albumNames),
     priceTiers: validPriceTiers.length > 0 ? validPriceTiers : item.priceTiers || [],
     priceTierText: formatPriceTierText(item.priceTiers),
     ticketPrice: validPriceTiers[0] || Number(item.ticketPrice || 0),
     isLighted: Boolean(userState && userState.isLighted),
     lightTime: userState ? userState.lightTime : '',
     expenseId: userState ? userState.expenseId : '',
-    photoCount: photos.length,
-    photoCountText: photos.length > 0 ? `回忆照片：${photos.length} 张` : '',
     songPreviewText: item.songPreviewText || (item.songList || []).slice(0, 3).join('、')
   };
 }
@@ -358,9 +645,9 @@ function filterStages(filter) {
   const keyword = (filter.keyword || '').trim();
   const year = filter.year || 'all';
   const lightStatus = filter.lightStatus || 'all';
-  const stageType = filter.stageType || 'all';
+  const meetCategory = filter.stageType || 'all';
   return listStages().filter((item) => {
-    const typeMatched = stageType === 'all' || item.stageType === stageType;
+    const typeMatched = matchesMeetCategory(item, meetCategory);
     const yearMatched = year === 'all' || String(item.year) === year;
     const keywordMatched =
       !keyword ||
@@ -401,12 +688,16 @@ function searchSongs(keyword) {
     .sort((a, b) => a.songName.localeCompare(b.songName, 'zh-CN'));
 }
 
+function getStagesByMeetCategory(category) {
+  return listStages().filter((item) => matchesMeetCategory(item, category));
+}
+
 function getStagesByType(stageType) {
   return listStages().filter((item) => item.stageType === stageType);
 }
 
 function getConcertStageOptions() {
-  return getStagesByType('concert').map((item) => ({
+  return getStagesByMeetCategory('concert').map((item) => ({
     id: item.stageId,
     name: `${item.date} ${item.stageName}`,
     date: item.date,
@@ -455,19 +746,23 @@ function getMeetTimeline() {
   const today = new Date();
   const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const meetStages = listStages()
-    .filter((item) => item.stageType === 'concert' || item.stageType === 'festival')
-    .filter((item) => item.isLighted)
+    .filter((item) => item.isLighted && !item.isCountdownPlaceholder)
     .filter((item) => parseDateValue(item.date))
     .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
 
+  const futureCandidates = listStages()
+    .filter((item) => parseDateValue(item.date))
+    .filter((item) => parseDateValue(item.date).getTime() > todayDate.getTime())
+    .filter((item) => item.isLighted || item.isCountdownPlaceholder)
+    .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
+
   const pastStages = meetStages.filter((item) => parseDateValue(item.date).getTime() <= todayDate.getTime());
-  const futureStages = meetStages.filter((item) => parseDateValue(item.date).getTime() > todayDate.getTime());
   const lastMeet = pastStages[pastStages.length - 1];
-  const nextMeet = futureStages[0];
+  const nextMeet = futureCandidates[0];
   const firstMeet = meetStages[0];
 
   return {
-    hasMeetStages: meetStages.length > 0,
+    hasMeetStages: meetStages.length > 0 || Boolean(nextMeet),
     lastMeet: buildMeetItem(lastMeet, lastMeet ? diffDays(parseDateValue(lastMeet.date), todayDate) : 0),
     nextMeet: buildMeetItem(nextMeet, nextMeet ? diffDays(todayDate, parseDateValue(nextMeet.date)) : 0),
     firstMeetDateText: firstMeet ? formatDisplayDate(firstMeet.date) : '暂无记录'
@@ -504,10 +799,10 @@ function buildRankMap(stagesList, fieldName) {
   }));
 }
 
-function getLightedStages(stageType) {
+function getLightedStages(meetCategory) {
   return listStages()
     .filter((item) => item.isLighted)
-    .filter((item) => !stageType || item.stageType === stageType);
+    .filter((item) => !meetCategory || matchesMeetCategory(item, meetCategory));
 }
 
 function getSongStats(stageList) {
@@ -551,9 +846,9 @@ function getAlbumSongProgress() {
     });
 }
 
-function getYearStats(year, stageType = 'all') {
+function getYearStats(year, meetCategory = 'all') {
   const targetYear = String(year || new Date().getFullYear());
-  const lightedStages = getLightedStages(stageType === 'all' ? '' : stageType)
+  const lightedStages = getLightedStages(meetCategory === 'all' ? '' : meetCategory)
     .filter((item) => String(item.year) === targetYear)
     .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
   const songStats = getSongStats(lightedStages);
@@ -571,10 +866,33 @@ function getYearStats(year, stageType = 'all') {
   };
 }
 
-function getStageStats() {
-  const list = listStages();
+function listCountableStages() {
+  return listStages().filter((item) => !item.isCountdownPlaceholder);
+}
+
+function getMeetCategoryCounts() {
+  const list = listCountableStages();
+  return {
+    concert: list.filter((item) => matchesMeetCategory(item, 'concert')).length,
+    special: list.filter((item) => matchesMeetCategory(item, 'special')).length
+  };
+}
+
+function getMeetCategoryOptions() {
+  const counts = getMeetCategoryCounts();
+  return [
+    { id: 'concert', name: `演唱会（${counts.concert}）` },
+    { id: 'special', name: `运动会/新年音乐会（${counts.special}）` }
+  ];
+}
+
+function getStageStats(meetCategory = 'all') {
+  const list =
+    meetCategory && meetCategory !== 'all'
+      ? listCountableStages().filter((item) => matchesMeetCategory(item, meetCategory))
+      : listCountableStages();
   const lightedStages = list.filter((item) => item.isLighted);
-  const songStats = getSongStats();
+  const songStats = getSongStats(lightedStages);
   const progressPercent = list.length > 0 ? Math.round((lightedStages.length / list.length) * 100) : 0;
   return {
     total: list.length,
@@ -585,8 +903,10 @@ function getStageStats() {
 }
 
 function getLinkedExpense(stage) {
-  const expenseService = require('./expenseService');
-  const expenses = expenseService.listExpenses();
+  if (!stage || !stage.isLighted) {
+    return null;
+  }
+  const expenses = getExpenseList();
   if (stage.expenseId) {
     const linked = expenses.find((item) => item.expenseId === stage.expenseId);
     if (linked) {
@@ -601,32 +921,61 @@ function hasStageLinkedExpense(stageOrId) {
   if (!stageId) {
     return false;
   }
-  const stage = listStages().find((item) => item.stageId === stageId);
-  return Boolean(stage && getLinkedExpense(stage));
+  const userState = getUserStageState(stageId);
+  if (!userState || !userState.expenseId) {
+    return false;
+  }
+  const expenses = getExpenseList();
+  return expenses.some((item) => item.expenseId === userState.expenseId);
 }
 
-function linkStageExpense(stageId, expenseId) {
+async function linkStageExpense(stageId, expenseId, actualTicketPrice = 0) {
   if (!stageId || !expenseId) {
     return;
   }
-  const userStages = storageService.getCollection(USER_ID, 'userStages');
-  const exists = userStages.find((item) => item.stageId === stageId);
-  if (exists) {
-    exists.isLighted = true;
-    exists.expenseId = expenseId;
-    if (!exists.lightTime) {
-      exists.lightTime = new Date().toISOString();
+  if (config.useStageBackend) {
+    try {
+      await requestStageApi({
+        url: '/user-stages/link-expense',
+        method: 'POST',
+        data: {
+          userId: USER_ID,
+          stageId,
+          expenseId,
+          actualTicketPrice
+        }
+      });
+    } catch (error) {
+      console.warn('关联消费记录失败', error);
+      return;
     }
   } else {
-    userStages.push({
-      userId: USER_ID,
-      stageId,
-      isLighted: true,
-      lightTime: new Date().toISOString(),
-      expenseId
-    });
+    const userStages = storageService.getCollection(USER_ID, 'userStages');
+    const exists = userStages.find((item) => item.stageId === stageId);
+    if (exists) {
+      exists.isLighted = true;
+      exists.expenseId = expenseId;
+      if (!exists.lightTime) {
+        exists.lightTime = new Date().toISOString();
+      }
+    } else {
+      userStages.push({
+        userId: USER_ID,
+        stageId,
+        isLighted: true,
+        lightTime: new Date().toISOString(),
+        expenseId
+      });
+    }
+    storageService.setCollection(USER_ID, 'userStages', userStages);
   }
-  storageService.setCollection(USER_ID, 'userStages', userStages);
+  setUserStageState(stageId, {
+    ...(getUserStageState(stageId) || { stageId }),
+    isLighted: true,
+    expenseId,
+    lightTime: new Date().toISOString(),
+    actualTicketPrice
+  });
 }
 
 function clearStageExpenseLink(stageId, expenseId) {
@@ -654,11 +1003,11 @@ function confirmUnlightStage(stageId, callbacks = {}) {
     cancelText: hasLinkedExpense ? '保留记录' : '再想想',
     confirmText: hasLinkedExpense ? '删除记录' : '取消点亮',
     confirmColor: '#c84d69',
-    success: (res) => {
+    success: async (res) => {
       if (!res.confirm && !hasLinkedExpense) {
         return;
       }
-      unlightStage(stageId, { deleteExpense: hasLinkedExpense && res.confirm });
+      await unlightStage(stageId, { deleteExpense: hasLinkedExpense && res.confirm });
       const deletedExpense = hasLinkedExpense && res.confirm;
       wx.showToast({
         title: deletedExpense ? '已删除记录' : '已取消点亮',
@@ -678,10 +1027,14 @@ function getStageDetail(stageId) {
   }
   const note = getStageNote(stageId);
   const expense = getLinkedExpense(stage);
-  const displaySeat = note.seat || (expense ? expense.seat : '');
+  const expenseSeat = expense ? expense.seat || '' : '';
+  const displaySeat = note.seat || expenseSeat;
   return {
     ...stage,
-    note,
+    note: {
+      ...note,
+      seat: displaySeat
+    },
     expense,
     displaySeat,
     expenseSummary: expense
@@ -696,9 +1049,9 @@ function getStageDetail(stageId) {
   };
 }
 
-function getMeetMemoryReport(stageType = 'concert') {
-  const typeName = stageType === 'festival' ? '音乐节/拼盘' : '演唱会';
-  const lightedMeetStages = getLightedStages(stageType)
+function getMeetMemoryReport(meetCategory = 'concert') {
+  const typeName = getMeetCategoryName(meetCategory);
+  const lightedMeetStages = getLightedStages(meetCategory)
     .filter((item) => parseDateValue(item.date))
     .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
   const cityRanking = buildRankMap(lightedMeetStages, 'cityName');
@@ -709,7 +1062,7 @@ function getMeetMemoryReport(stageType = 'concert') {
   const topVenue = venueRanking[0] || { name: '暂无记录', count: 0 };
 
   return {
-    stageType,
+    stageType: meetCategory,
     typeName,
     hasRecords: lightedMeetStages.length > 0,
     meetCount: lightedMeetStages.length,
@@ -726,15 +1079,15 @@ function getMeetMemoryReport(stageType = 'concert') {
   };
 }
 
-function getAnnualMemoryReport(year, stageType = 'all') {
+function getAnnualMemoryReport(year, meetCategory = 'all') {
   const targetYear = String(year || new Date().getFullYear());
   const expenseService = require('./expenseService');
   const lightedStages = getLightedStages()
-    .filter((item) => stageType === 'all' || item.stageType === stageType)
+    .filter((item) => matchesMeetCategory(item, meetCategory))
     .filter((item) => String(item.year) === targetYear);
   const songStats = getSongStats(lightedStages);
   const cityRanking = buildRankMap(lightedStages, 'cityName');
-  const expenses = expenseService.listExpenses().filter((item) => {
+  const expenses = getExpenseList().filter((item) => {
     if (!item.stageId) {
       return false;
     }
@@ -758,11 +1111,11 @@ function getAnnualMemoryReport(year, stageType = 'all') {
   };
 }
 
-function getMeetCalendar(year, stageType = 'concert') {
+function getMeetCalendar(year, meetCategory = 'concert') {
   const targetYear = String(year || new Date().getFullYear());
   const today = new Date();
   const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const lightedStages = getLightedStages(stageType === 'all' ? '' : stageType)
+  const lightedStages = getLightedStages(meetCategory === 'all' ? '' : meetCategory)
     .filter((item) => String(item.year) === targetYear)
     .sort((a, b) => parseDateValue(a.date).getTime() - parseDateValue(b.date).getTime());
   const monthMap = {};
@@ -832,32 +1185,6 @@ function getSongCollectionStats() {
   };
 }
 
-function getPhotoWall() {
-  const validStageIds = new Set(stageCache.map((item) => item.stageId));
-  const groups = getStageNotes()
-    .filter((item) => validStageIds.has(item.stageId))
-    .filter((item) => (item.photos || []).length > 0)
-    .map((note) => {
-      const stage = listStages().find((item) => item.stageId === note.stageId);
-      if (!stage) {
-        return null;
-      }
-      return {
-        stageId: note.stageId,
-        stageName: stage.stageName,
-        date: stage.date,
-        city: stage.cityName,
-        photos: note.photos || []
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  return {
-    hasPhotos: groups.length > 0,
-    groups
-  };
-}
-
 function splitCompanions(text) {
   return (text || '')
     .split(/[,，、;；\n]/)
@@ -899,34 +1226,62 @@ function getCompanionProfiles() {
       ...profileMap[key],
       stages: profileMap[key].stages.sort((a, b) => b.date.localeCompare(a.date))
     }))
-  );
+  ).map((item, index) => ({
+    ...item,
+    rank: index + 1
+  }));
 }
 
 function setStageLighted(stageId, isLighted, options = {}) {
-  const userStages = storageService.getCollection(USER_ID, 'userStages');
-  const exists = userStages.find((item) => item.stageId === stageId);
-  if (exists) {
-    if (!isLighted && options.deleteExpense) {
-      const expenseService = require('./expenseService');
-      const stage = listStages().find((item) => item.stageId === stageId);
-      const linked = stage ? getLinkedExpense(stage) : null;
-      if (linked) {
+  return setStageLightedAsync(stageId, isLighted, options);
+}
+
+async function setStageLightedAsync(stageId, isLighted, options = {}) {
+  if (!isLighted && options.deleteExpense) {
+    const expenseService = require('./expenseService');
+    const stage = listStages().find((item) => item.stageId === stageId);
+    const linked = stage ? getLinkedExpense(stage) : null;
+    if (linked) {
+      if (config.useBackend) {
+        await expenseService.removeExpenseAsync(linked.expenseId);
+      } else {
         expenseService.removeExpense(linked.expenseId);
       }
-      exists.expenseId = '';
+      expenseListCache = null;
+      await loadExpenseCache();
     }
-    exists.isLighted = isLighted;
-    exists.lightTime = isLighted ? new Date().toISOString() : '';
-  } else {
-    userStages.push({
-      userId: USER_ID,
-      stageId,
-      isLighted,
-      lightTime: isLighted ? new Date().toISOString() : '',
-      expenseId: ''
-    });
   }
-  storageService.setCollection(USER_ID, 'userStages', userStages);
+
+  if (config.useStageBackend) {
+    try {
+      await requestStageApi({
+        url: `/user-stages/${isLighted ? 'light' : 'unlight'}`,
+        method: 'POST',
+        data: {
+          userId: USER_ID,
+          stageId,
+          clearExpense: true
+        }
+      });
+      const previous = getUserStageState(stageId) || { stageId };
+      setUserStageState(stageId, {
+        stageId,
+        isLighted,
+        lightTime: isLighted ? previous.lightTime || new Date().toISOString() : '',
+        expenseId: isLighted ? previous.expenseId || '' : '',
+        actualTicketPrice: isLighted ? Number(previous.actualTicketPrice || 0) : 0
+      });
+    } catch (error) {
+      return { valid: false, message: error.message || '更新点亮状态失败' };
+    }
+  } else {
+    persistUserStageStateLocal(stageId, isLighted, options);
+  }
+
+  if (!isLighted) {
+    await clearStageNote(stageId);
+  }
+
   return {
     valid: true,
     data: listStages().find((item) => item.stageId === stageId)
@@ -934,18 +1289,18 @@ function setStageLighted(stageId, isLighted, options = {}) {
 }
 
 function lightStage(stageId) {
-  return setStageLighted(stageId, true);
+  return setStageLightedAsync(stageId, true);
 }
 
 function unlightStage(stageId, options = {}) {
-  return setStageLighted(stageId, false, options);
+  return setStageLightedAsync(stageId, false, options);
 }
 
 function getStageById(stageId) {
   return stageCache.find((item) => item.stageId === stageId);
 }
 
-function createExpenseFromStage(stageId, priceTier) {
+async function createExpenseFromStage(stageId, priceTier) {
   const expenseService = require('./expenseService');
   const stage = getStageById(stageId);
   if (!stage) {
@@ -955,9 +1310,9 @@ function createExpenseFromStage(stageId, priceTier) {
   if (price <= 0) {
     return { valid: false, message: '请先选择票档或输入有效票价' };
   }
-  const expenseResult = expenseService.addExpense({
+  const payload = {
     category: 'meet',
-    subType: stage.stageType === 'festival' ? 'festival' : 'concert',
+    subType: inferExpenseSubType(stage),
     itemName: stage.stageName,
     amount: price,
     quantity: 1,
@@ -969,12 +1324,17 @@ function createExpenseFromStage(stageId, priceTier) {
     stageId: stage.stageId,
     stageDate: stage.date,
     priceTier: price
-  });
+  };
+  const expenseResult = config.useBackend
+    ? await expenseService.addExpenseAsync(payload)
+    : expenseService.addExpense(payload);
   if (!expenseResult.valid) {
     return expenseResult;
   }
 
-  linkStageExpense(stageId, expenseResult.data.expenseId);
+  await linkStageExpense(stageId, expenseResult.data.expenseId, price);
+  expenseListCache = null;
+  await loadExpenseCache();
   return {
     valid: true,
     data: expenseResult.data
@@ -987,7 +1347,7 @@ function getStageDashboard(filter = {}) {
   return {
     meetTimeline: getMeetTimeline(),
     stages: filterStages(filter),
-    stats: getStageStats(),
+    stats: getStageStats(filter.stageType || 'all'),
     songStats: getSongStats(),
     albumProgress: getAlbumSongProgress(),
     songSearchResults,
@@ -1000,6 +1360,8 @@ module.exports = {
   ensureStagesLoaded,
   getYearOptions,
   getStatsYearOptions,
+  getMeetCategoryOptions,
+  getMeetCategoryCounts,
   listStages,
   filterStages,
   searchSongs,
@@ -1014,7 +1376,6 @@ module.exports = {
   getAnnualMemoryReport,
   getMeetCalendar,
   getSongCollectionStats,
-  getPhotoWall,
   getCompanionProfiles,
   getSongStats,
   getAlbumSongProgress,
@@ -1022,10 +1383,9 @@ module.exports = {
   getStageStats,
   getStageDashboard,
   getStageDetail,
+  getStageById,
   getStageNote,
   saveStageNote,
-  addStagePhotos,
-  removeStagePhoto,
   getValidPriceTiers,
   promptPriceTier,
   getAllAlbumNames,
@@ -1034,6 +1394,5 @@ module.exports = {
   getLinkedExpense,
   linkStageExpense,
   clearStageExpenseLink,
-  confirmUnlightStage,
-  MAX_PHOTOS
+  confirmUnlightStage
 };

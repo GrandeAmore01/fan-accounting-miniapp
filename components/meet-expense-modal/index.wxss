@@ -1,0 +1,148 @@
+.modal-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  padding: 28rpx;
+  background: rgba(32, 26, 24, 0.42);
+}
+
+.modal-panel {
+  width: 100%;
+  max-height: 88vh;
+  padding: 0 30rpx 30rpx;
+  overflow-y: auto;
+  border-radius: 20rpx 20rpx 16rpx 16rpx;
+  background: #fffef9;
+  box-sizing: border-box;
+}
+
+.modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 -30rpx 18rpx;
+  padding: 28rpx 30rpx 20rpx;
+  border-bottom: 1rpx solid #f1e4b6;
+  background: #fffef9;
+}
+
+.card-title {
+  color: #2d2718;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.close-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: #fff2bf;
+  color: #111111;
+  font-size: 40rpx;
+  line-height: 1;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+
+.form-field {
+  margin-bottom: 20rpx;
+}
+
+.form-section {
+  margin: 8rpx 0 24rpx;
+  padding: 22rpx;
+  border: 1rpx solid #efe0a8;
+  border-radius: 14rpx;
+  background: #fffefe;
+}
+
+.section-title {
+  display: block;
+  margin-bottom: 16rpx;
+  color: #2d2718;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.muted {
+  display: block;
+  margin-top: 8rpx;
+  color: #837965;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.form-input,
+.picker-field {
+  width: 100%;
+  min-height: 72rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid #eadca8;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #2a2418;
+  font-size: 26rpx;
+  line-height: 72rpx;
+  box-sizing: border-box;
+}
+
+.input-hint {
+  color: #9c4f00;
+}
+
+.search-result {
+  margin-top: 12rpx;
+  padding: 16rpx 20rpx;
+  border: 1rpx solid #efe0a8;
+  border-radius: 12rpx;
+  background: #fffdf5;
+}
+
+.search-hit {
+  color: #b48a00;
+  font-weight: 700;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin: 12rpx 0 24rpx;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.modal-actions .secondary-button,
+.modal-actions .primary-button {
+  flex: 1;
+  margin: 0;
+}
+
+.secondary-button {
+  color: #6f6758;
+  background: #fff8d8;
+}
+
+.primary-button {
+  color: #2d2718;
+  background: #f5c400;
+}

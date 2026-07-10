@@ -1,18 +1,57 @@
-const storageService = require('./storageService');
 const stageService = require('./stageService');
 const apiService = require('./apiService');
 const config = require('./config');
-const { expenseTypes, searchableItems } = require('../data/expenseTypes');
+const collectionService = require('./collectionService');
 
 const USER_ID = config.userId || 'local-user';
+const EXPENSE_API_BASE_URL = config.expenseApiBaseUrl || config.apiBaseUrl;
+const expenseTypes = [
+  {
+    id: 'meet',
+    name: '见面',
+    subTypes: [
+      { id: 'concert', name: '演唱会' },
+      { id: 'new_year_concert', name: '新年音乐会' },
+      { id: 'sports_day', name: '运动会' }
+    ]
+  },
+  {
+    id: 'collection',
+    name: '藏品',
+    subTypes: [
+      { id: 'goods', name: '周边' },
+      { id: 'magazine', name: '杂志' },
+      { id: 'gift', name: '伴手礼' },
+      { id: 'support_wear', name: '应援服' }
+    ]
+  },
+  {
+    id: 'accommodation',
+    name: '住宿',
+    subTypes: [{ id: 'hotel', name: '酒店/住宿' }]
+  },
+  {
+    id: 'transport',
+    name: '交通',
+    subTypes: [{ id: 'travel', name: '交通出行' }]
+  },
+  {
+    id: 'other',
+    name: '其他',
+    subTypes: [{ id: 'other', name: '其他消费' }]
+  }
+];
+const searchableItems = [];
 const expenseCategories = expenseTypes;
-const feeLabels = {
-  premium: '加价',
-  travel: '路费',
-  hotel: '住宿',
-  rental: '设备',
-  other: '其他',
-  shipping: '邮费'
+const feeLabels = {};
+const MAX_NAME_LENGTH = 80;
+const MAX_TEXT_LENGTH = 120;
+const MAX_REMARK_LENGTH = 160;
+const MAX_COLLECTION_QUANTITY = 100;
+let expenseListCache = [];
+const legacyCollectionSubTypes = {
+  album: { id: 'album', name: '实体专辑' },
+  other_collection: { id: 'other_collection', name: '其他藏品' }
 };
 
 function getMainType(mainTypeId) {
@@ -24,7 +63,30 @@ function getSubType(mainTypeId, subTypeId) {
   if (!mainType) {
     return null;
   }
-  return mainType.subTypes.find((item) => item.id === subTypeId);
+  return mainType.subTypes.find((item) => item.id === subTypeId) ||
+    (mainTypeId === 'collection' ? legacyCollectionSubTypes[subTypeId] : null);
+}
+
+function inferCollectionSubType(collection = {}) {
+  const text = [
+    collection.collectionCategory,
+    collection.category,
+    collection.primaryCategory,
+    collection.secondaryCategory,
+    collection.productStyle,
+    collection.collectionName
+  ].filter(Boolean).join(' ');
+
+  if (/应援服|服装|衣服|T恤|卫衣|support/i.test(text)) {
+    return 'support_wear';
+  }
+  if (/伴手礼|票根赠品|赠品|gift/i.test(text)) {
+    return 'gift';
+  }
+  if (/杂志|刊物|magazine/i.test(text)) {
+    return 'magazine';
+  }
+  return 'goods';
 }
 
 function getCategoryName(categoryId, subTypeId) {
@@ -46,30 +108,33 @@ function formatMoney(value) {
 
 function normalizeFees(fees = {}) {
   return {
-    premium: toNumber(fees.premium),
-    travel: toNumber(fees.travel),
-    hotel: toNumber(fees.hotel),
-    rental: toNumber(fees.rental),
-    other: toNumber(fees.other),
-    shipping: toNumber(fees.shipping)
+    premium: 0,
+    travel: 0,
+    hotel: 0,
+    rental: 0,
+    other: 0,
+    shipping: 0
   };
 }
 
 function calculateTotalAmount(expense) {
-  const fees = normalizeFees(expense.fees);
-  return (
-    toNumber(expense.amount) * toNumber(expense.quantity || 1) +
-    fees.premium +
-    fees.travel +
-    fees.hotel +
-    fees.rental +
-    fees.other +
-    fees.shipping
-  );
+  return calculateBaseAmount(expense);
 }
 
 function calculateBaseAmount(expense) {
-  return toNumber(expense.amount) * toNumber(expense.quantity || 1);
+  const amount = toNumber(expense.amount);
+  const quantity = toNumber(expense.quantity || 1);
+
+  switch (expense.pricingMode) {
+    case 'official_unit':
+    case 'unit':
+      return amount * quantity;
+
+    case 'total':
+    case 'direct':
+    default:
+      return amount;
+  }
 }
 
 function isConcertExpense(expense) {
@@ -83,9 +148,6 @@ function shouldIncludeExpense(expense) {
 function calculateIncludedAmount(expense) {
   if (!shouldIncludeExpense(expense)) {
     return 0;
-  }
-  if (isConcertExpense(expense) && expense.outfieldOnly) {
-    return calculateBaseAmount(expense);
   }
   return calculateTotalAmount(expense);
 }
@@ -103,12 +165,11 @@ function getFeeTags(fees = {}) {
 }
 
 function enrichExpense(item) {
-  const outfieldOnly = Boolean(item.outfieldOnly);
   const nextItem = {
     ...item,
-    outfieldOnly,
-    includeInTotal: isConcertExpense(item) ? item.includeInTotal !== false : outfieldOnly ? false : item.includeInTotal !== false,
-    images: item.images || [],
+    outfieldOnly: false,
+    includeInTotal: item.includeInTotal !== false,
+    images: [],
     fees: normalizeFees(item.fees)
   };
   return {
@@ -122,12 +183,10 @@ function enrichExpense(item) {
 }
 
 function listExpenses() {
-  return storageService.getCollection(USER_ID, 'expenses').map(enrichExpense);
+  return expenseListCache;
 }
 
 function normalizeExpense(expense) {
-  const outfieldOnly = Boolean(expense.outfieldOnly);
-  const isConcert = expense.category === 'meet' && expense.subType === 'concert';
   return {
     expenseId: expense.expenseId || `expense_${Date.now()}`,
     category: expense.category || 'meet',
@@ -140,32 +199,75 @@ function normalizeExpense(expense) {
     seat: (expense.seat || '').trim(),
     location: (expense.location || '').trim(),
     remark: (expense.remark || '').trim(),
-    images: (expense.images || []).slice(0, 9),
+    images: [],
     fees: normalizeFees(expense.fees),
-    outfieldOnly,
-    includeInTotal: isConcert ? expense.includeInTotal !== false : outfieldOnly ? false : expense.includeInTotal !== false,
+    outfieldOnly: false,
+    includeInTotal: expense.includeInTotal !== false,
     collectionId: expense.collectionId || '',
     stageId: expense.stageId || '',
     stageDate: expense.stageDate || '',
-    priceTier: expense.priceTier || ''
+    priceTier: expense.priceTier || '',
+    city: (expense.city || '').trim(),
+    purchaseChannel: expense.purchaseChannel || 'none',
+    pricingMode: expense.pricingMode || 'direct',
+    referencePrice:
+      expense.referencePrice === null || expense.referencePrice === ''
+        ? null
+        : Number(expense.referencePrice || 0),
+    unitPrice:
+      expense.unitPrice === null || expense.unitPrice === ''
+        ? null
+        : Number(expense.unitPrice || 0),
+    expenseSource: expense.expenseSource || 'manual'
   };
 }
 
 function validateExpense(expense) {
   const nextExpense = normalizeExpense(expense);
+  const amountText = String(expense.amount || '').trim();
   if (!nextExpense.itemName) {
     return { valid: false, message: '请填写消费项目名称' };
   }
   if (!nextExpense.date) {
     return { valid: false, message: '请选择消费日期' };
   }
-  if (nextExpense.images.length > 9) {
-    return { valid: false, message: '图片最多上传 9 张' };
+  if (nextExpense.category === 'meet' && !nextExpense.stageDate) {
+    return { valid: false, message: '请选择见面日期' };
+  }
+  if (nextExpense.itemName.length > MAX_NAME_LENGTH) {
+    return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
+  }
+  if (nextExpense.remark.length > MAX_REMARK_LENGTH) {
+    return { valid: false, message: `备注上限为 ${MAX_REMARK_LENGTH} 个字` };
+  }
+  if (
+    nextExpense.city.length > MAX_TEXT_LENGTH ||
+    nextExpense.location.length > MAX_TEXT_LENGTH ||
+    nextExpense.seat.length > MAX_TEXT_LENGTH
+  ) {
+    return { valid: false, message: `城市、地点或座位上限为 ${MAX_TEXT_LENGTH} 个字` };
   }
   if (!nextExpense.amount || nextExpense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };
   }
-  if (!nextExpense.quantity || nextExpense.quantity <= 0) {
+  if (!/^\d+(\.\d{1,2})?$/.test(amountText)) {
+    return { valid: false, message: '金额最多保留两位小数' };
+  }
+  if (nextExpense.amount > 1000000) {
+    return { valid: false, message: '金额不能超过 100 万元' };
+  }
+  if (!expenseCategories.some((item) => item.id === nextExpense.category)) {
+    return { valid: false, message: '消费分类不正确' };
+  }
+  if (nextExpense.category === 'collection') {
+    if (
+      !Number.isInteger(nextExpense.quantity) ||
+      nextExpense.quantity < 1 ||
+      nextExpense.quantity > MAX_COLLECTION_QUANTITY
+    ) {
+      return { valid: false, message: `藏品数量必须是 1 到 ${MAX_COLLECTION_QUANTITY} 之间的整数` };
+    }
+  } else if (!nextExpense.quantity || nextExpense.quantity <= 0) {
     return { valid: false, message: '请输入大于 0 的数量' };
   }
   return { valid: true, data: nextExpense };
@@ -173,49 +275,62 @@ function validateExpense(expense) {
 
 function syncStageLight(expense) {
   if (expense.category === 'meet' && expense.stageId) {
-    stageService.lightStage(expense.stageId);
-    if (expense.expenseId) {
-      stageService.linkStageExpense(expense.stageId, expense.expenseId);
+    stageService.lightStage(expense.stageId).then(() => {
+      if (expense.expenseId) {
+        return stageService.linkStageExpense(expense.stageId, expense.expenseId);
+      }
+      return null;
+    }).catch((error) => {
+      console.warn('同步舞台点亮状态失败', error);
+    });
+  }
+}
+
+async function syncDeletedExpenseLinksAsync(removed) {
+  if (!removed) {
+    return;
+  }
+  const expenses = await listExpensesAsync();
+
+  if (removed.stageId) {
+    const remainingStageExpense = expenses.find((item) => item.stageId === removed.stageId);
+    if (remainingStageExpense) {
+      await stageService.linkStageExpense(
+        removed.stageId,
+        remainingStageExpense.expenseId,
+        Number(remainingStageExpense.priceTier || remainingStageExpense.amount || 0)
+      );
+    } else {
+      await stageService.unlightStage(removed.stageId);
+    }
+  }
+
+  if (removed.collectionId) {
+    const hasRemainingCollectionExpense = expenses.some(
+      (item) => item.collectionId === removed.collectionId
+    );
+    if (!hasRemainingCollectionExpense) {
+      await collectionService.unlightCollection(removed.collectionId);
     }
   }
 }
 
 function addExpense(expense) {
-  const validation = validateExpense(expense);
-  if (!validation.valid) {
-    return validation;
-  }
-  const expenses = storageService.getCollection(USER_ID, 'expenses');
-  const nextExpense = validation.data;
-  storageService.setCollection(USER_ID, 'expenses', [nextExpense, ...expenses]);
-  syncStageLight(nextExpense);
-  return { valid: true, data: nextExpense };
+  return {
+    valid: false,
+    message: '消费记录已切换为云端存储，请使用 addExpenseAsync'
+  };
 }
 
 function updateExpense(expenseId, expense) {
-  const validation = validateExpense({
-    ...expense,
-    expenseId
-  });
-  if (!validation.valid) {
-    return validation;
-  }
-  const expenses = storageService.getCollection(USER_ID, 'expenses');
-  const nextExpenses = expenses.map((item) => (item.expenseId === expenseId ? validation.data : item));
-  storageService.setCollection(USER_ID, 'expenses', nextExpenses);
-  syncStageLight(validation.data);
-  return { valid: true, data: validation.data };
+  return {
+    valid: false,
+    message: '消费记录已切换为云端存储，请使用 updateExpenseAsync'
+  };
 }
 
 function removeExpense(expenseId) {
-  const expenses = storageService.getCollection(USER_ID, 'expenses');
-  const removed = expenses.find((item) => item.expenseId === expenseId);
-  const nextExpenses = expenses.filter((item) => item.expenseId !== expenseId);
-  storageService.setCollection(USER_ID, 'expenses', nextExpenses);
-  if (removed && removed.stageId) {
-    stageService.clearStageExpenseLink(removed.stageId, expenseId);
-  }
-  return nextExpenses;
+  return false;
 }
 
 function filterExpenses(filter) {
@@ -289,13 +404,26 @@ function getCategoryStats() {
 }
 
 async function listExpensesAsync() {
-  if (!config.useBackend) {
-    return listExpenses();
-  }
   const data = await apiService.request({
+    baseUrl: EXPENSE_API_BASE_URL,
     url: `/expenses${apiService.buildQuery({ userId: USER_ID })}`
   });
-  return (data || []).map(enrichExpense);
+  expenseListCache = (data || []).map(enrichExpense);
+  return expenseListCache;
+}
+
+async function listMeetStagesAsync() {
+  try {
+    const data = await apiService.request({
+      baseUrl: EXPENSE_API_BASE_URL,
+      url: '/expenses/meet-stages'
+    });
+    return data || [];
+  } catch (error) {
+    console.warn('meet stages api failed, fallback to stage cache', error);
+  }
+  await stageService.ensureStagesLoaded();
+  return stageService.listStages();
 }
 
 async function filterExpensesAsync(filter) {
@@ -314,15 +442,13 @@ async function getCategoryStatsAsync() {
 }
 
 async function addExpenseAsync(expense) {
-  if (!config.useBackend) {
-    return addExpense(expense);
-  }
   const validation = validateExpense(expense);
   if (!validation.valid) {
     return validation;
   }
   try {
     const data = await apiService.request({
+      baseUrl: EXPENSE_API_BASE_URL,
       url: '/expenses',
       method: 'POST',
       data: {
@@ -331,6 +457,7 @@ async function addExpenseAsync(expense) {
       }
     });
     const nextExpense = enrichExpense(data);
+    expenseListCache = [nextExpense, ...expenseListCache.filter((item) => item.expenseId !== nextExpense.expenseId)];
     syncStageLight(nextExpense);
     return { valid: true, data: nextExpense };
   } catch (error) {
@@ -339,9 +466,6 @@ async function addExpenseAsync(expense) {
 }
 
 async function updateExpenseAsync(expenseId, expense) {
-  if (!config.useBackend) {
-    return updateExpense(expenseId, expense);
-  }
   const validation = validateExpense({
     ...expense,
     expenseId
@@ -351,6 +475,7 @@ async function updateExpenseAsync(expenseId, expense) {
   }
   try {
     const data = await apiService.request({
+      baseUrl: EXPENSE_API_BASE_URL,
       url: `/expenses/${expenseId}`,
       method: 'PUT',
       data: {
@@ -359,6 +484,9 @@ async function updateExpenseAsync(expenseId, expense) {
       }
     });
     const nextExpense = enrichExpense(data);
+    expenseListCache = expenseListCache.map((item) => (
+      item.expenseId === nextExpense.expenseId ? nextExpense : item
+    ));
     syncStageLight(nextExpense);
     return { valid: true, data: nextExpense };
   } catch (error) {
@@ -366,14 +494,15 @@ async function updateExpenseAsync(expenseId, expense) {
   }
 }
 
-async function removeExpenseAsync(expenseId) {
-  if (!config.useBackend) {
-    return removeExpense(expenseId);
-  }
+async function removeExpenseAsync(expenseId, removedExpense = null) {
+  const removed = removedExpense || (await listExpensesAsync()).find((item) => item.expenseId === expenseId);
   await apiService.request({
+    baseUrl: EXPENSE_API_BASE_URL,
     url: `/expenses/${expenseId}${apiService.buildQuery({ userId: USER_ID })}`,
     method: 'DELETE'
   });
+  expenseListCache = expenseListCache.filter((item) => item.expenseId !== expenseId);
+  await syncDeletedExpenseLinksAsync(removed);
   return true;
 }
 
@@ -382,6 +511,7 @@ module.exports = {
   searchableItems,
   getMainType,
   getSubType,
+  inferCollectionSubType,
   getCategoryName,
   calculateTotalAmount,
   calculateIncludedAmount,
@@ -389,6 +519,7 @@ module.exports = {
   listExpenses,
   filterExpenses,
   listExpensesAsync,
+  listMeetStagesAsync,
   filterExpensesAsync,
   addExpense,
   addExpenseAsync,

@@ -6,6 +6,10 @@ const VALID_CATEGORIES = [
   'accommodation',
   'other'
 ];
+const MAX_NAME_LENGTH = 80;
+const MAX_TEXT_LENGTH = 120;
+const MAX_REMARK_LENGTH = 160;
+const MAX_COLLECTION_QUANTITY = 100;
 
 function toNumber(value) {
   return Number(value || 0);
@@ -13,13 +17,13 @@ function toNumber(value) {
 
 function normalizeFees(fees = {}) {
   return feeKeys.reduce((result, key) => {
-    result[key] = toNumber(fees[key]);
+    result[key] = 0;
     return result;
   }, {});
 }
 
 function normalizeImages(images = []) {
-  return Array.isArray(images) ? images.slice(0, 9).map((item) => String(item)) : [];
+  return [];
 }
 
 function calculateBaseAmount(expense) {
@@ -39,16 +43,7 @@ function calculateBaseAmount(expense) {
 }
 
 function calculateTotalAmount(expense) {
-  const fees = normalizeFees(expense.fees);
-  return (
-    calculateBaseAmount(expense) +
-    fees.premium +
-    fees.travel +
-    fees.hotel +
-    fees.rental +
-    fees.other +
-    fees.shipping
-  );
+  return calculateBaseAmount(expense);
 }
 
 function isConcertExpense(expense) {
@@ -59,9 +54,6 @@ function calculateIncludedAmount(expense) {
   if (expense.includeInTotal === false) {
     return 0;
   }
-  if (isConcertExpense(expense) && expense.outfieldOnly) {
-    return calculateBaseAmount(expense);
-  }
   return calculateTotalAmount(expense);
 }
 
@@ -70,7 +62,6 @@ function createExpenseId() {
 }
 
 function normalizeExpense(input = {}, expenseId) {
-  const outfieldOnly = Boolean(input.outfieldOnly);
   const base = {
     expenseId: expenseId || input.expenseId || createExpenseId(),
     userId: input.userId || 'local-user',
@@ -88,13 +79,8 @@ function normalizeExpense(input = {}, expenseId) {
     remark: String(input.remark || '').trim(),
     images: normalizeImages(input.images),
     fees: normalizeFees(input.fees),
-    outfieldOnly,
-    includeInTotal:
-      input.category === 'meet' && input.subType === 'concert'
-        ? input.includeInTotal !== false
-        : outfieldOnly
-          ? false
-          : input.includeInTotal !== false,
+    outfieldOnly: false,
+    includeInTotal: input.includeInTotal !== false,
     collectionId: input.collectionId || '',
     stageId: input.stageId || '',
     stageDate: input.stageDate || '',
@@ -103,12 +89,12 @@ function normalizeExpense(input = {}, expenseId) {
     purchaseChannel: input.purchaseChannel || 'none',
     pricingMode: input.pricingMode || 'direct',
     referencePrice:
-      input.referencePrice === null ||
+      input.referencePrice == null ||
       input.referencePrice === ''
         ? null
         : toNumber(input.referencePrice),
     unitPrice:
-      input.unitPrice === null ||
+      input.unitPrice == null ||
       input.unitPrice === ''
         ? null
         : toNumber(input.unitPrice),
@@ -124,17 +110,34 @@ function normalizeExpense(input = {}, expenseId) {
 }
 
 function validateExpense(expense) {
+  const amountText = String(expense.amount || '').trim();
   if (!expense.itemName) {
     return { valid: false, message: '请填写消费项目名称' };
   }
   if (!expense.date) {
     return { valid: false, message: '请选择消费日期' };
   }
-  if (expense.images.length > 9) {
-    return { valid: false, message: '图片最多上传 9 张' };
+  if (expense.category === 'meet' && !expense.stageDate) {
+    return { valid: false, message: '请选择见面日期' };
+  }
+  if (String(expense.itemName || '').length > MAX_NAME_LENGTH) {
+    return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
+  }
+  if (String(expense.remark || '').length > MAX_REMARK_LENGTH) {
+    return { valid: false, message: `备注上限为 ${MAX_REMARK_LENGTH} 个字` };
+  }
+  if (
+    String(expense.city || '').length > MAX_TEXT_LENGTH ||
+    String(expense.location || '').length > MAX_TEXT_LENGTH ||
+    String(expense.seat || '').length > MAX_TEXT_LENGTH
+  ) {
+    return { valid: false, message: `城市、地点或座位上限为 ${MAX_TEXT_LENGTH} 个字` };
   }
   if (!expense.amount || expense.amount <= 0) {
     return { valid: false, message: '请输入大于 0 的金额' };
+  }
+  if (!/^\d+(\.\d{1,2})?$/.test(amountText)) {
+    return { valid: false, message: '金额最多保留两位小数' };
   }
   if (!expense.quantity || expense.quantity <= 0) {
     return { valid: false, message: '请输入大于 0 的数量' };
@@ -147,19 +150,19 @@ function validateExpense(expense) {
     return { valid: false, message: '金额必须大于0' };
   }
 
-  if (expense.totalAmount >= 1000000) {
-    return { valid: false, message: '金额必须小于100万元' };
+  if (expense.amount > 1000000) {
+    return { valid: false, message: '金额不能超过100万元' };
   }
 
   if (
     expense.category === 'collection' &&
     (!Number.isInteger(expense.quantity) ||
       expense.quantity < 1 ||
-      expense.quantity > 10)
+      expense.quantity > MAX_COLLECTION_QUANTITY)
   ) {
     return {
       valid: false,
-      message: '藏品数量必须是1至10之间的整数'
+      message: `藏品数量必须是 1 到 ${MAX_COLLECTION_QUANTITY} 之间的整数`
     };
   }
   return { valid: true };
@@ -179,6 +182,19 @@ function parseJson(value, fallback) {
   }
 }
 
+function formatDate(value) {
+  if (!value) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.slice(0, 10);
+  }
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function rowToExpense(row) {
   return {
     expenseId: row.expense_id,
@@ -188,7 +204,7 @@ function rowToExpense(row) {
     itemName: row.item_name,
     amount: Number(row.amount),
     quantity: Number(row.quantity),
-    date: row.expense_date,
+    date: formatDate(row.expense_date),
     paymentMethod: row.payment_method || '',
     seat: row.seat || '',
     location: row.location || '',

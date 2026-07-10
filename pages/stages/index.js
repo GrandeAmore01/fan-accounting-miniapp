@@ -1,11 +1,13 @@
 const stageService = require('../../services/stageService');
 
+const PENDING_STAGE_DRAFT_KEY = 'pendingStageExpenseDraft';
+
 Page({
   data: {
     loading: true,
     stageTypeOptions: [
       { id: 'concert', name: '演唱会' },
-      { id: 'festival', name: '音乐节|拼盘' }
+      { id: 'special', name: '运动会/新年音乐会' }
     ],
     stageTypeIndex: 0,
     yearOptions: [{ id: 'all', name: '全部年份' }],
@@ -44,7 +46,9 @@ Page({
       songAppearCount: 0,
       topSongs: [],
       stages: []
-    }
+    },
+    expenseModalVisible: false,
+    expenseModalStageId: ''
   },
 
   onShow() {
@@ -66,15 +70,20 @@ Page({
   refreshPage() {
     const statsYearOptions = stageService.getStatsYearOptions();
     const yearOptions = stageService.getYearOptions();
+    const stageTypeOptions = stageService.getMeetCategoryOptions();
     const statsYearIndex = Math.min(this.data.statsYearIndex, Math.max(statsYearOptions.length - 1, 0));
+    const stageTypeIndex = Math.min(this.data.stageTypeIndex, Math.max(stageTypeOptions.length - 1, 0));
+    const activeStageType = stageTypeOptions[stageTypeIndex].id;
     const dashboard = stageService.getStageDashboard({
-      stageType: this.data.stageTypeOptions[this.data.stageTypeIndex].id,
+      stageType: activeStageType,
       year: yearOptions[this.data.yearIndex] ? yearOptions[this.data.yearIndex].id : 'all',
       lightStatus: this.data.statusOptions[this.data.statusIndex].id,
       keyword: this.data.keyword,
       statsYear: statsYearOptions[statsYearIndex] ? statsYearOptions[statsYearIndex].id : ''
     });
     this.setData({
+      stageTypeOptions,
+      stageTypeIndex,
       yearOptions,
       statsYearOptions,
       statsYearIndex,
@@ -145,7 +154,28 @@ Page({
 
   handleLightStage(event) {
     const { id } = event.currentTarget.dataset;
-    const result = stageService.lightStage(id);
+    this.lightStageById(id);
+  },
+
+  openStageExpenseDraft(stageId) {
+    wx.setStorageSync(PENDING_STAGE_DRAFT_KEY, {
+      stageId,
+      createdAt: Date.now()
+    });
+    wx.switchTab({
+      url: '/pages/expenses/index',
+      fail: () => {
+        wx.removeStorageSync(PENDING_STAGE_DRAFT_KEY);
+        this.setData({
+          expenseModalVisible: true,
+          expenseModalStageId: stageId
+        });
+      }
+    });
+  },
+
+  async lightStageById(id) {
+    const result = await stageService.lightStage(id);
     if (!result.valid) {
       wx.showToast({ title: result.message, icon: 'none' });
       return;
@@ -158,9 +188,9 @@ Page({
     }
     wx.showModal({
       title: '同步消费记录',
-      content: '已点亮该场次，是否按票档同步生成一条消费记录？',
+      content: '已点亮该场次，是否新增见面消费记录？',
       cancelText: '仅点亮',
-      confirmText: '生成记录',
+      confirmText: '去新增',
       confirmColor: '#c84d69',
       success: (res) => {
         if (!res.confirm) {
@@ -168,11 +198,25 @@ Page({
           this.refreshPage();
           return;
         }
-        setTimeout(() => {
-          this.handleCreateExpenseFromStage(stage);
-        }, 350);
+        this.openStageExpenseDraft(id);
       }
     });
+  },
+
+  handleCloseExpenseModal() {
+    this.setData({
+      expenseModalVisible: false,
+      expenseModalStageId: ''
+    });
+    this.refreshPage();
+  },
+
+  handleExpenseModalSuccess() {
+    this.setData({
+      expenseModalVisible: false,
+      expenseModalStageId: ''
+    });
+    this.refreshPage();
   },
 
   handleCreateExpenseFromStage(stage) {
@@ -181,31 +225,17 @@ Page({
       this.refreshPage();
       return;
     }
-    stageService.promptPriceTier(stage, {
-      onSelect: (priceTier) => {
-        this.createExpenseFromStage(stage.stageId, priceTier);
-      },
-      onCancel: () => {
-        wx.showToast({ title: '已点亮', icon: 'success' });
-        this.refreshPage();
-      }
+    this.setData({
+      expenseModalVisible: true,
+      expenseModalStageId: stage.stageId
     });
-  },
-
-  createExpenseFromStage(stageId, priceTier) {
-    const expenseResult = stageService.createExpenseFromStage(stageId, priceTier);
-    wx.showToast({
-      title: expenseResult.valid ? '已生成记录' : expenseResult.message,
-      icon: expenseResult.valid ? 'success' : 'none'
-    });
-    this.refreshPage();
   },
 
   handleUnlightStage(event) {
     const { id } = event.currentTarget.dataset;
     stageService.confirmUnlightStage(id, {
       onDone: () => {
-        this.refreshPage();
+        this.loadPage();
       }
     });
   }

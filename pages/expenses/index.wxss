@@ -189,6 +189,11 @@
   border-bottom: 0;
 }
 
+.search-hit {
+  color: #d12b2b;
+  font-weight: 800;
+}
+
 .image-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -351,6 +356,8 @@
   font-size: 34rpx;
   font-weight: 800;
   line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .stat-label {
@@ -412,6 +419,19 @@
   color: #8a6400;
 }
 
+.sort-picker {
+  min-height: 64rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #eadca8;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #5f543e;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 64rpx;
+  white-space: nowrap;
+}
+
 .extra-switch {
   display: flex;
   flex: 1;
@@ -459,13 +479,16 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 18rpx;
   margin-bottom: 14rpx;
 }
 
 .type-tag {
   display: inline-flex;
+  flex: 1 1 260rpx;
   max-width: 420rpx;
+  min-width: 0;
   min-height: 44rpx;
   align-items: center;
   padding: 0 16rpx;
@@ -487,17 +510,23 @@
 
 .amount-stack {
   display: flex;
-  flex-shrink: 0;
+  flex: 1 1 220rpx;
+  min-width: 0;
   flex-direction: column;
   align-items: flex-end;
-  min-width: 190rpx;
+  max-width: 100%;
 }
 
 .display-amount {
+  display: block;
+  max-width: 100%;
   color: #a06a00;
   font-size: 30rpx;
   font-weight: 800;
   line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: right;
+  word-break: break-all;
 }
 
 .expense-title {

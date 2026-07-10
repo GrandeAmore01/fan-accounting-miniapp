@@ -1,5 +1,7 @@
 const stageService = require('../../services/stageService');
 
+const PENDING_STAGE_DRAFT_KEY = 'pendingStageExpenseDraft';
+
 Page({
   data: {
     loading: true,
@@ -12,7 +14,8 @@ Page({
       companions: '',
       actualTicketPrice: '',
       note: ''
-    }
+    },
+    expenseModalVisible: false
   },
 
   onLoad(options) {
@@ -76,12 +79,9 @@ Page({
     });
   },
 
-  handleSaveNote() {
-    const { noteForm, stageId, detail } = this.data;
-    const result = stageService.saveStageNote(stageId, {
-      ...noteForm,
-      photos: detail.note.photos || []
-    });
+  async handleSaveNote() {
+    const { noteForm, stageId } = this.data;
+    const result = await stageService.saveStageNote(stageId, noteForm);
     if (!result.valid) {
       wx.showToast({ title: result.message, icon: 'none' });
       return;
@@ -91,53 +91,8 @@ Page({
     this.loadDetail();
   },
 
-  handleChoosePhotos() {
-    const currentCount = (this.data.detail.note.photos || []).length;
-    const remain = stageService.MAX_PHOTOS - currentCount;
-    if (remain <= 0) {
-      wx.showToast({ title: '最多上传9张', icon: 'none' });
-      return;
-    }
-    wx.chooseMedia({
-      count: remain,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      success: (res) => {
-        const paths = (res.tempFiles || []).map((item) => item.tempFilePath);
-        stageService.addStagePhotos(this.data.stageId, paths);
-        wx.showToast({ title: '已添加', icon: 'success' });
-        this.loadDetail();
-      }
-    });
-  },
-
-  handlePreviewPhoto(event) {
-    const { url } = event.currentTarget.dataset;
-    const photos = this.data.detail.note.photos || [];
-    wx.previewImage({
-      current: url,
-      urls: photos
-    });
-  },
-
-  handleRemovePhoto(event) {
-    const { url } = event.currentTarget.dataset;
-    wx.showModal({
-      title: '删除照片',
-      content: '确定删除这张照片吗？',
-      success: (res) => {
-        if (!res.confirm) {
-          return;
-        }
-        stageService.removeStagePhoto(this.data.stageId, url);
-        wx.showToast({ title: '已删除', icon: 'success' });
-        this.loadDetail();
-      }
-    });
-  },
-
-  handleLightStage() {
-    const result = stageService.lightStage(this.data.stageId);
+  async handleLightStage() {
+    const result = await stageService.lightStage(this.data.stageId);
     if (!result.valid) {
       wx.showToast({ title: result.message, icon: 'none' });
       return;
@@ -150,9 +105,9 @@ Page({
     }
     wx.showModal({
       title: '同步消费记录',
-      content: '已点亮该场次，是否按票档同步生成一条消费记录？',
+      content: '已点亮该场次，是否新增见面消费记录？',
       cancelText: '仅点亮',
-      confirmText: '生成记录',
+      confirmText: '去新增',
       confirmColor: '#c84d69',
       success: (res) => {
         if (!res.confirm) {
@@ -160,28 +115,34 @@ Page({
           this.loadDetail();
           return;
         }
-        setTimeout(() => {
-          this.createExpense(stage);
-        }, 350);
+        this.openStageExpenseDraft();
       }
     });
   },
 
-  createExpense(stage) {
-    stageService.promptPriceTier(stage, {
-      onSelect: (priceTier) => {
-        const result = stageService.createExpenseFromStage(stage.stageId, priceTier);
-        wx.showToast({
-          title: result.valid ? '已生成记录' : result.message,
-          icon: result.valid ? 'success' : 'none'
-        });
-        this.loadDetail();
-      },
-      onCancel: () => {
-        wx.showToast({ title: '已点亮', icon: 'success' });
-        this.loadDetail();
+  openStageExpenseDraft() {
+    wx.setStorageSync(PENDING_STAGE_DRAFT_KEY, {
+      stageId: this.data.stageId,
+      createdAt: Date.now()
+    });
+    wx.switchTab({
+      url: '/pages/expenses/index',
+      fail: () => {
+        wx.removeStorageSync(PENDING_STAGE_DRAFT_KEY);
+        this.setData({ expenseModalVisible: true });
       }
     });
+  },
+
+  handleCloseExpenseModal() {
+    this.setData({ expenseModalVisible: false });
+    this.loadDetail();
+  },
+
+  handleExpenseModalSuccess() {
+    this.setData({ expenseModalVisible: false });
+    wx.showToast({ title: '已生成记录', icon: 'success' });
+    this.loadDetail();
   },
 
   handleUnlightStage() {

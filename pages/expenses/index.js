@@ -1,6 +1,107 @@
 const expenseService = require('../../services/expenseService');
 const budgetService = require('../../services/budgetService');
+const collectionCatalogService = require('../../services/collectionCatalogService');
 const stageService = require('../../services/stageService');
+
+const PENDING_COLLECTION_DRAFT_KEY = 'pendingCollectionExpenseDraft';
+const PENDING_STAGE_DRAFT_KEY = 'pendingStageExpenseDraft';
+const PENDING_COLLECTION_DRAFT_MAX_AGE = 10 * 60 * 1000;
+const MAX_SEARCH_LENGTH = 40;
+const MAX_NAME_LENGTH = 80;
+const MAX_TEXT_LENGTH = 120;
+const MAX_REMARK_LENGTH = 160;
+const MAX_AMOUNT = 1000000;
+const MAX_COLLECTION_QUANTITY = 100;
+
+const TEXT_FIELD_LIMITS = {
+  itemName: MAX_NAME_LENGTH,
+  city: MAX_TEXT_LENGTH,
+  location: MAX_TEXT_LENGTH,
+  seat: MAX_TEXT_LENGTH,
+  remark: MAX_REMARK_LENGTH
+};
+
+const TEXT_FIELD_NAMES = {
+  itemName: '\u9879\u76ee\u540d\u79f0',
+  city: '\u57ce\u5e02',
+  location: '\u5730\u70b9',
+  seat: '\u5ea7\u4f4d',
+  remark: '\u5907\u6ce8'
+};
+
+function inferMeetStageType(stage) {
+  const name = `${stage.stageName || ''}${stage.name || ''}`;
+  if (name.indexOf('新年音乐会') >= 0) {
+    return 'new_year_concert';
+  }
+  if (name.indexOf('运动会') >= 0) {
+    return 'sports_day';
+  }
+  return stage.stageType || 'concert';
+}
+
+function isMeetStageType(subType) {
+  return ['concert', 'new_year_concert', 'sports_day'].includes(subType);
+}
+
+function getMeetStageLabel(subType) {
+  const match = expenseService.getSubType('meet', subType);
+  return match ? match.name : '见面';
+}
+
+function getPositivePriceTiers(stage) {
+  return (stage.priceTiers || [])
+    .map((price) => Number(price))
+    .filter((price) => Number.isFinite(price) && price > 0);
+}
+
+function buildHighlightedSegments(text, keyword) {
+  const source = String(text || '');
+  const target = String(keyword || '').trim();
+  if (!source || !target) {
+    return [{ text: source, matched: false }];
+  }
+  const lowerSource = source.toLowerCase();
+  const lowerTarget = target.toLowerCase();
+  const segments = [];
+  let cursor = 0;
+  let index = lowerSource.indexOf(lowerTarget);
+  while (index >= 0) {
+    if (index > cursor) {
+      segments.push({ text: source.slice(cursor, index), matched: false });
+    }
+    segments.push({ text: source.slice(index, index + target.length), matched: true });
+    cursor = index + target.length;
+    index = lowerSource.indexOf(lowerTarget, cursor);
+  }
+  if (cursor < source.length) {
+    segments.push({ text: source.slice(cursor), matched: false });
+  }
+  return segments.length ? segments : [{ text: source, matched: false }];
+}
+
+function buildCollectionDetailText(item) {
+  return [
+    item.saleType,
+    item.primaryCategory,
+    item.secondaryCategory,
+    item.productStyle,
+    item.seriesName,
+    item.priceNote
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function buildCollectionPriceText(item) {
+  return item.priceText || (
+    item.referencePrice ? `参考价 ¥${item.referencePrice}` : '暂无参考价'
+  );
+}
+
+function getSortDateValue(item) {
+  return new Date(item.date || '1970-01-01').getTime();
+}
 
 function createDefaultFormData() {
   return {
@@ -14,8 +115,8 @@ function createDefaultFormData() {
     paymentMethod: '微信支付',
     seat: '',
     location: '',
+    city: '',
     remark: '',
-    images: [],
     fees: {
       premium: '',
       travel: '',
@@ -29,7 +130,12 @@ function createDefaultFormData() {
     collectionId: '',
     stageId: '',
     stageDate: '',
-    priceTier: ''
+    priceTier: '',
+    purchaseChannel: 'official',
+    pricingMode: 'direct',
+    referencePrice: '',
+    unitPrice: '',
+    expenseSource: 'manual'
   };
 }
 
@@ -44,17 +150,43 @@ Page({
     filterCategoryIndex: 0,
     keyword: '',
     showActualAmount: false,
+    sortOptions: [
+      { id: 'date_desc', name: '日期从新到旧' },
+      { id: 'date_asc', name: '日期从旧到新' },
+      { id: 'amount_desc', name: '总价格从高到低' },
+      { id: 'amount_asc', name: '总价格从低到高' }
+    ],
+    sortIndex: 0,
     paymentMethods: ['微信支付', '支付宝', '银行卡', '现金', '其他'],
+    purchaseChannels: [
+      { id: 'official', name: '官方渠道' },
+      { id: 'other', name: '其他渠道' }
+    ],
+    pricingModes: [
+      { id: 'direct', name: '直接填写总金额' },
+      { id: 'official_unit', name: '官方金额档位' },
+      { id: 'total', name: '按总价记录' }
+    ],
+    purchaseChannelIndex: 0,
+    pricingModeIndex: 0,
     concertStages: [],
+    meetStages: [],
     concertStageIndex: 0,
     priceTiers: [],
     priceTierLabels: [],
     priceTierIndex: 0,
     matchedMeetStageName: '',
     searchKeyword: '',
+    meetSearchKeyword: '',
+    collectionSearchKeyword: '',
+    selectedCollectionMeta: '',
     searchResults: [],
+    stageDateOptions: [],
+    stageDateLabels: [],
+    stageDateIndex: 0,
     formVisible: false,
     formMode: 'create',
+    formSubmitting: false,
     formTitle: '新增消费记录',
     formData: createDefaultFormData(),
     categoryIndex: 0,
@@ -70,18 +202,21 @@ Page({
     }
   },
 
-  onShow() {
-    this.refreshPage();
+  async onShow() {
+    await this.refreshPage();
+    await this.openPendingCollectionExpenseDraft();
+    await this.openPendingStageExpenseDraft();
   },
 
   async refreshPage() {
     const filterCategory = this.data.categoryTabs[this.data.activeCategoryIndex].id;
     try {
+      await this.loadMeetStages();
       const expenseList = await expenseService.filterExpensesAsync({
         category: filterCategory,
         keyword: this.data.keyword
       });
-      const expenses = expenseList.map((item) => ({
+      const expenses = this.sortExpenseList(expenseList).map((item) => ({
         ...item,
         includedAmountText: expenseService.formatMoney(item.includedAmount),
         totalAmountText: expenseService.formatMoney(item.totalAmount),
@@ -89,7 +224,7 @@ Page({
         displayAmountText: expenseService.formatMoney(
           this.data.showActualAmount ? item.totalAmount : item.includedAmount
         ),
-        metaText: [item.date, item.location, item.seat].filter(Boolean).join(' · ')
+        metaText: [item.date, item.city, item.location, item.seat].filter(Boolean).join(' · ')
       }));
       const summary = await expenseService.getExpenseSummaryAsync();
       const categoryStats = await expenseService.getCategoryStatsAsync();
@@ -115,11 +250,114 @@ Page({
     }
   },
 
-  handleKeywordInput(event) {
+  sortExpenseList(expenseList) {
+    const sortOption = this.data.sortOptions[this.data.sortIndex] || this.data.sortOptions[0];
+    return [...expenseList].sort((a, b) => {
+      if (sortOption.id === 'date_asc') {
+        return getSortDateValue(a) - getSortDateValue(b);
+      }
+      if (sortOption.id === 'amount_desc') {
+        return Number(b.totalAmount || 0) - Number(a.totalAmount || 0);
+      }
+      if (sortOption.id === 'amount_asc') {
+        return Number(a.totalAmount || 0) - Number(b.totalAmount || 0);
+      }
+      return getSortDateValue(b) - getSortDateValue(a);
+    });
+  },
+
+  async loadMeetStages() {
+    const meetStages = await expenseService.listMeetStagesAsync();
     this.setData({
-      keyword: event.detail.value
+      meetStages
+    });
+    return meetStages;
+  },
+
+  async openPendingCollectionExpenseDraft() {
+    const draft = wx.getStorageSync(PENDING_COLLECTION_DRAFT_KEY);
+    if (!draft || !draft.collectionId) {
+      return;
+    }
+    wx.removeStorageSync(PENDING_COLLECTION_DRAFT_KEY);
+
+    if (Date.now() - Number(draft.createdAt || 0) > PENDING_COLLECTION_DRAFT_MAX_AGE) {
+      wx.showToast({
+        title: '藏品信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+      return;
+    }
+
+    try {
+      const collection = await collectionCatalogService.getCollection(draft.collectionId);
+      this.openCollectionExpenseDraft(collection);
+    } catch (error) {
+      wx.showToast({
+        title: error.message || '藏品信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+    }
+  },
+
+  async openPendingStageExpenseDraft() {
+    const draft = wx.getStorageSync(PENDING_STAGE_DRAFT_KEY);
+    if (!draft || !draft.stageId) {
+      return;
+    }
+    wx.removeStorageSync(PENDING_STAGE_DRAFT_KEY);
+
+    if (Date.now() - Number(draft.createdAt || 0) > PENDING_COLLECTION_DRAFT_MAX_AGE) {
+      wx.showToast({
+        title: '场次信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+      return;
+    }
+
+    try {
+      const meetStages = await this.loadMeetStages();
+      let stage = (meetStages || []).find((item) => item.stageId === draft.stageId);
+      if (!stage) {
+        await stageService.ensureStagesLoaded();
+        const cached = stageService.getStageById(draft.stageId);
+        if (cached) {
+          stage = {
+            stageId: cached.stageId,
+            stageName: cached.stageName,
+            stageType: inferMeetStageType(cached),
+            date: cached.date,
+            city: cached.cityName || cached.city || '',
+            venue: cached.venueName || cached.venue || '',
+            location: cached.venueName || cached.location || '',
+            priceTiers: cached.priceTiers || []
+          };
+        }
+      }
+      if (!stage) {
+        throw new Error('场次信息加载失败，请重新尝试');
+      }
+      this.openStageExpenseDraft(stage);
+    } catch (error) {
+      wx.showToast({
+        title: error.message || '场次信息加载失败，请重新尝试',
+        icon: 'none'
+      });
+    }
+  },
+
+  handleKeywordInput(event) {
+    const nextKeyword = this.limitPlainText(
+      event.detail.value,
+      this.data.keyword,
+      MAX_SEARCH_LENGTH,
+      '\u641c\u7d22\u5173\u952e\u8bcd'
+    );
+    this.setData({
+      keyword: nextKeyword
     });
     this.refreshPage();
+    return nextKeyword;
   },
 
   handleFilterCategoryChange(event) {
@@ -147,6 +385,13 @@ Page({
     this.refreshPage();
   },
 
+  handleSortChange(event) {
+    this.setData({
+      sortIndex: Number(event.detail.value)
+    });
+    this.refreshPage();
+  },
+
   handleClearFilter() {
     this.setData({
       keyword: '',
@@ -156,7 +401,8 @@ Page({
     this.refreshPage();
   },
 
-  handleOpenCreate() {
+  async handleOpenCreate() {
+    await this.loadMeetStages();
     const activeCategoryId = this.data.categoryTabs[this.data.activeCategoryIndex].id;
     const categoryIndex =
       activeCategoryId === 'all'
@@ -173,6 +419,8 @@ Page({
       stageId: '',
       stageDate: '',
       priceTier: '',
+      purchaseChannel: ['meet', 'collection'].includes(category.id) ? 'official' : 'none',
+      pricingMode: ['meet', 'collection'].includes(category.id) ? 'official_unit' : 'direct',
       date: this.getToday()
     };
     this.applyFormState({
@@ -183,12 +431,109 @@ Page({
       categoryIndex,
       subTypeIndex: 0,
       paymentMethodIndex: 0,
+      purchaseChannelIndex: 0,
+      pricingModeIndex: 0,
       searchKeyword: '',
-      searchResults: []
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
-  handleOpenEdit(event) {
+  openCollectionExpenseDraft(collection) {
+    const categoryIndex = Math.max(
+      this.data.categories.findIndex((item) => item.id === 'collection'),
+      0
+    );
+    const category = this.data.categories[categoryIndex];
+    const subType = expenseService.inferCollectionSubType(collection);
+    const subTypeIndex = Math.max(
+      (category.subTypes || []).findIndex((item) => item.id === subType),
+      0
+    );
+    const referencePrice = collection.referencePrice === null ||
+      typeof collection.referencePrice === 'undefined'
+        ? ''
+        : String(collection.referencePrice);
+
+    this.applyFormState({
+      formVisible: true,
+      formMode: 'create',
+      formTitle: '新增消费记录',
+      formData: {
+        ...createDefaultFormData(),
+        category: 'collection',
+        subType: (category.subTypes[subTypeIndex] || {}).id || subType,
+        itemName: collection.collectionName || '',
+        amount: referencePrice,
+        quantity: 1,
+        date: this.getToday(),
+        collectionId: collection.collectionId || '',
+        referencePrice,
+        unitPrice: referencePrice,
+        expenseSource: 'collection',
+        purchaseChannel: 'official',
+        pricingMode: 'official_unit'
+      },
+      categoryIndex,
+      subTypeIndex,
+      paymentMethodIndex: 0,
+      purchaseChannelIndex: 0,
+      pricingModeIndex: 0,
+      searchKeyword: collection.collectionName || '',
+      meetSearchKeyword: '',
+      collectionSearchKeyword: collection.collectionName || '',
+      selectedCollectionMeta: [buildCollectionDetailText(collection), buildCollectionPriceText(collection)]
+        .filter(Boolean)
+        .join(' 路 '),
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
+    });
+  },
+
+  openStageExpenseDraft(stage) {
+    const categoryIndex = Math.max(
+      this.data.categories.findIndex((item) => item.id === 'meet'),
+      0
+    );
+    const formData = {
+      ...createDefaultFormData(),
+      category: 'meet',
+      subType: inferMeetStageType(stage),
+      date: this.getToday(),
+      purchaseChannel: 'official',
+      pricingMode: 'official_unit'
+    };
+    this.applyFormState({
+      formVisible: true,
+      formMode: 'create',
+      formTitle: '新增消费记录',
+      formData,
+      categoryIndex,
+      subTypeIndex: 0,
+      paymentMethodIndex: 0,
+      purchaseChannelIndex: 0,
+      pricingModeIndex: 0,
+      searchKeyword: '',
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
+    });
+    this.applySelectedMeetStage(stage);
+  },
+
+  async handleOpenEdit(event) {
+    await this.loadMeetStages();
     const expenseId = event.currentTarget.dataset.id;
     const expense = this.data.expenses.find((item) => item.expenseId === expenseId);
     if (!expense) {
@@ -206,6 +551,14 @@ Page({
     const subTypes = category.subTypes || [];
     const subTypeIndex = Math.max(subTypes.findIndex((item) => item.id === expense.subType), 0);
     const paymentMethodIndex = Math.max(this.data.paymentMethods.indexOf(expense.paymentMethod), 0);
+    const purchaseChannelIndex = Math.max(
+      this.data.purchaseChannels.findIndex((item) => item.id === expense.purchaseChannel),
+      0
+    );
+    const pricingModeIndex = Math.max(
+      this.data.pricingModes.findIndex((item) => item.id === expense.pricingMode),
+      0
+    );
     this.applyFormState({
       formVisible: true,
       formMode: 'edit',
@@ -223,8 +576,16 @@ Page({
       categoryIndex,
       subTypeIndex,
       paymentMethodIndex,
+      purchaseChannelIndex,
+      pricingModeIndex,
       searchKeyword: '',
-      searchResults: []
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
@@ -242,32 +603,37 @@ Page({
         ? nextState.subTypeIndex
         : subTypes.findIndex((item) => item.id === formData.subType);
     const safeSubTypeIndex = Math.max(subTypeIndex, 0);
-    const concertStages = stageService.listStages().filter((item) => item.stageType === 'concert' || item.stageType === 'festival');
+    const isMeetStage = formData.category === 'meet' && isMeetStageType(formData.subType);
+    const concertStages = (this.data.meetStages || []).filter((item) => (
+      inferMeetStageType(item) === formData.subType
+    ));
     const isDateMatchedMeet =
-      formData.category === 'meet' && (formData.subType === 'concert' || formData.subType === 'festival');
+      isMeetStage && Boolean(formData.stageDate);
     const matchedStage =
       isDateMatchedMeet
-        ? stageService.findStageByDate(formData.date, formData.subType)
+        ? concertStages.find((item) => item.date === formData.stageDate)
         : null;
     const concertStageIndex = matchedStage
-      ? Math.max(concertStages.findIndex((item) => item.id === matchedStage.stageId), 0)
+      ? Math.max(concertStages.findIndex((item) => item.stageId === matchedStage.stageId), 0)
       : 0;
-    const priceTiers = matchedStage ? matchedStage.priceTiers || [] : [];
+    const priceTiers = matchedStage ? getPositivePriceTiers(matchedStage) : [];
     const priceTierLabels = priceTiers.map((price) => `${price} 元`);
     const priceTierIndex = Math.max(priceTiers.findIndex((price) => String(price) === String(formData.priceTier)), 0);
     const shouldAutoFillStage =
       formData.category === 'meet' &&
-      (formData.subType === 'concert' || formData.subType === 'festival') &&
+      isMeetStage &&
       matchedStage &&
-      (!formData.stageId || formData.stageDate !== formData.date);
+      formData.stageId !== matchedStage.stageId;
+    const shouldUseOfficialTier = formData.category === 'meet' && formData.purchaseChannel === 'official';
     const nextFormData = shouldAutoFillStage
       ? {
           ...formData,
           stageId: matchedStage.stageId,
           stageDate: matchedStage.date,
           itemName: matchedStage.stageName,
+          city: matchedStage.city || formData.city,
           location: matchedStage.location || formData.location,
-          amount: priceTiers.length ? String(priceTiers[0]) : formData.amount,
+          amount: shouldUseOfficialTier && priceTiers.length ? String(priceTiers[0]) : formData.amount,
           priceTier: priceTiers.length ? String(priceTiers[0]) : ''
         }
       : matchedStage
@@ -275,7 +641,6 @@ Page({
         : {
             ...formData,
             stageId: '',
-            stageDate: '',
             priceTier: isDateMatchedMeet ? '' : formData.priceTier
           };
 
@@ -287,14 +652,17 @@ Page({
       subTypeIndex: safeSubTypeIndex,
       concertStages,
       concertStageIndex,
-      priceTiers,
-      priceTierLabels,
+        priceTiers,
+        priceTierLabels,
       priceTierIndex,
       matchedMeetStageName: matchedStage ? matchedStage.stageName : ''
     });
   },
 
   handleCloseForm() {
+    if (this.data.formSubmitting) {
+      return;
+    }
     this.setData({
       formVisible: false
     });
@@ -302,22 +670,20 @@ Page({
 
   handleFormInput(event) {
     const field = event.currentTarget.dataset.field;
+    const value = this.sanitizeFormInput(field, event.detail.value);
     this.setData({
-      [`formData.${field}`]: event.detail.value
+      [`formData.${field}`]: value
     });
-  },
-
-  handleFeeInput(event) {
-    const field = event.currentTarget.dataset.field;
-    this.setData({
-      [`formData.fees.${field}`]: event.detail.value
-    });
+    return value;
   },
 
   handleCategoryChange(event) {
     const categoryIndex = Number(event.detail.value);
     const category = this.data.categories[categoryIndex];
     const firstSubType = category.subTypes[0];
+    const isCollection = category.id === 'collection';
+    const isDirectCost = ['transport', 'accommodation', 'other'].includes(category.id);
+    const hasPurchaseChannel = ['meet', 'collection'].includes(category.id);
     this.applyFormState({
       categoryIndex,
       subTypeIndex: 0,
@@ -327,12 +693,30 @@ Page({
         subType: firstSubType.id,
         itemName: category.id === 'meet' ? firstSubType.name : '',
         amount: '',
+        quantity: isCollection ? 1 : 1,
         stageId: '',
         stageDate: '',
-        priceTier: ''
+        priceTier: '',
+        collectionId: '',
+        city: '',
+        location: '',
+        seat: '',
+        purchaseChannel: hasPurchaseChannel ? 'official' : isDirectCost ? 'none' : 'none',
+        pricingMode: hasPurchaseChannel ? 'official_unit' : 'direct',
+        referencePrice: '',
+        unitPrice: '',
+        expenseSource: 'manual'
       },
+      purchaseChannelIndex: 0,
+      pricingModeIndex: 0,
       searchKeyword: '',
-      searchResults: []
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
@@ -344,8 +728,21 @@ Page({
       formData: {
         ...this.data.formData,
         subType: subType.id,
-        itemName: this.data.formData.category === 'meet' ? subType.name : this.data.formData.itemName
+        itemName: this.data.formData.category === 'meet' ? subType.name : this.data.formData.itemName,
+        stageId: '',
+        stageDate: '',
+        priceTier: '',
+        amount: this.data.formData.category === 'meet' ? '' : this.data.formData.amount
       }
+    ,
+      searchKeyword: '',
+      meetSearchKeyword: '',
+      collectionSearchKeyword: '',
+      selectedCollectionMeta: '',
+      searchResults: [],
+      stageDateOptions: [],
+      stageDateLabels: [],
+      stageDateIndex: 0
     });
   },
 
@@ -357,75 +754,139 @@ Page({
     });
   },
 
+  handlePurchaseChannelChange(event) {
+    const purchaseChannelIndex = Number(event.detail.value);
+    const purchaseChannel = this.data.purchaseChannels[purchaseChannelIndex];
+    const isMeet = this.data.formData.category === 'meet';
+    const isCollection = this.data.formData.category === 'collection';
+    const hasPriceTier = this.data.priceTiers.length > 0;
+    const pricingMode =
+      (isMeet && purchaseChannel.id === 'official' && hasPriceTier) ||
+      (isCollection && purchaseChannel.id === 'official')
+        ? 'official_unit'
+        : 'total';
+    const pricingModeIndex = Math.max(
+      this.data.pricingModes.findIndex((item) => item.id === pricingMode),
+      0
+    );
+    this.setData({
+      purchaseChannelIndex,
+      pricingModeIndex,
+      'formData.purchaseChannel': purchaseChannel.id,
+      'formData.pricingMode': pricingMode,
+      'formData.amount':
+        isMeet && purchaseChannel.id === 'official' && hasPriceTier
+          ? this.data.formData.priceTier
+          : isCollection && purchaseChannel.id === 'official'
+            ? this.data.formData.referencePrice || this.data.formData.amount
+            : ''
+    });
+  },
+
+  handlePricingModeChange(event) {
+    const pricingModeIndex = Number(event.detail.value);
+    const pricingMode = this.data.pricingModes[pricingModeIndex];
+    this.setData({
+      pricingModeIndex,
+      'formData.pricingMode': pricingMode.id
+    });
+  },
+
   handleDateChange(event) {
     const date = event.detail.value;
-    if (
-      this.data.formData.category === 'meet' &&
-      (this.data.formData.subType === 'concert' || this.data.formData.subType === 'festival')
-    ) {
-      const matchedStage = stageService.findStageByDate(date, this.data.formData.subType);
-      if (matchedStage) {
-        const priceTiers = matchedStage.priceTiers || [];
-        const priceTierLabels = priceTiers.map((price) => `${price} 元`);
-        this.setData({
-          'formData.date': date,
-          'formData.stageId': matchedStage.stageId,
-          'formData.stageDate': matchedStage.date,
-          'formData.itemName': matchedStage.stageName,
-          'formData.location': matchedStage.location || '',
-          'formData.amount': priceTiers.length ? String(priceTiers[0]) : '',
-          'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : '',
-          concertStageIndex: Math.max(
-            this.data.concertStages.findIndex((item) => item.id === matchedStage.stageId),
-            0
-          ),
-          priceTiers,
-          priceTierLabels,
-          priceTierIndex: 0,
-          matchedMeetStageName: matchedStage.stageName
-        });
-        return;
-      }
-
-      const fallbackName = this.data.formData.subType === 'festival' ? '音乐节|拼盘' : '演唱会';
-      this.setData({
-        'formData.date': date,
-        'formData.stageId': '',
-        'formData.stageDate': '',
-        'formData.itemName': this.data.matchedMeetStageName ? fallbackName : this.data.formData.itemName || fallbackName,
-        'formData.location': this.data.matchedMeetStageName ? '' : this.data.formData.location,
-        'formData.amount': '',
-        'formData.priceTier': '',
-        priceTiers: [],
-        priceTierLabels: [],
-        priceTierIndex: 0,
-        matchedMeetStageName: ''
-      });
-      return;
-    }
-
     this.setData({
       'formData.date': date
     });
   },
 
+  handleMeetDateChange(event) {
+    const date = event.detail.value;
+    if (this.data.formData.category === 'meet' && isMeetStageType(this.data.formData.subType)) {
+      const matchedStage =
+        (this.data.meetStages || []).find((item) => (
+          inferMeetStageType(item) === this.data.formData.subType && item.date === date
+        )) ||
+        (this.data.meetStages || []).find((item) => item.date === date);
+      if (matchedStage) {
+        this.applySelectedMeetStage(matchedStage, {
+          stageDateOptions: [],
+          stageDateLabels: [],
+          stageDateIndex: 0
+        });
+        return;
+      }
+
+      const fallbackName = getMeetStageLabel(this.data.formData.subType);
+      this.setData({
+        'formData.stageId': '',
+        'formData.stageDate': date,
+        'formData.itemName': this.data.matchedMeetStageName ? fallbackName : this.data.formData.itemName || fallbackName,
+        'formData.city': this.data.matchedMeetStageName ? '' : this.data.formData.city,
+        'formData.location': this.data.matchedMeetStageName ? '' : this.data.formData.location,
+        'formData.amount': this.data.formData.purchaseChannel === 'official' ? '' : this.data.formData.amount,
+        'formData.priceTier': '',
+        priceTiers: [],
+        priceTierLabels: [],
+        priceTierIndex: 0,
+        matchedMeetStageName: '',
+        stageDateOptions: [],
+        stageDateLabels: [],
+        stageDateIndex: 0
+      });
+      return;
+    }
+  },
+
   handleConcertStageChange(event) {
     const concertStageIndex = Number(event.detail.value);
     const stage = this.data.concertStages[concertStageIndex];
-    const priceTiers = stage.priceTiers || [];
+    this.applySelectedMeetStage(stage, { concertStageIndex });
+  },
+
+  handleStageDateOptionChange(event) {
+    const stageDateIndex = Number(event.detail.value);
+    const stage = this.data.stageDateOptions[stageDateIndex];
+    if (!stage) {
+      return;
+    }
+    this.applySelectedMeetStage(stage, { stageDateIndex });
+  },
+
+  applySelectedMeetStage(stage, extraState = {}) {
+    const priceTiers = getPositivePriceTiers(stage);
     const priceTierLabels = priceTiers.map((price) => `${price} 元`);
+    const shouldUseOfficialTier = this.data.formData.purchaseChannel === 'official';
+    const stageType = inferMeetStageType(stage);
+    const category = this.data.categories[this.data.categoryIndex] || {};
+    const subTypes = category.subTypes || [];
+    const subTypeIndex = Math.max(subTypes.findIndex((item) => item.id === stageType), 0);
+    const concertStages = (this.data.meetStages || []).filter((item) => (
+      inferMeetStageType(item) === stageType
+    ));
     this.setData({
-      concertStageIndex,
+      ...extraState,
+      subTypeIndex,
+      concertStages,
+      concertStageIndex: Math.max(
+        concertStages.findIndex((item) => item.stageId === stage.stageId),
+        0
+      ),
       priceTiers,
       priceTierLabels,
       priceTierIndex: 0,
-      'formData.stageId': stage.id,
+      matchedMeetStageName: stage.stageName,
+      searchKeyword: stage.stageName,
+      meetSearchKeyword: stage.stageName || '',
+      searchResults: [],
+      'formData.subType': stageType,
+      'formData.stageId': stage.stageId,
       'formData.stageDate': stage.date,
-      'formData.date': stage.date,
       'formData.itemName': stage.stageName,
-      'formData.location': stage.location || '',
-      'formData.amount': priceTiers.length ? String(priceTiers[0]) : '',
-      'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : ''
+      'formData.city': stage.city || '',
+      'formData.location': stage.venue || stage.location || '',
+      'formData.amount': shouldUseOfficialTier && priceTiers.length ? String(priceTiers[0]) : '',
+      'formData.priceTier': priceTiers.length ? String(priceTiers[0]) : '',
+      'formData.pricingMode': shouldUseOfficialTier && priceTiers.length ? 'official_unit' : 'total'
     });
   },
 
@@ -437,115 +898,221 @@ Page({
     }
     this.setData({
       priceTierIndex,
-      'formData.amount': String(priceTier),
+      'formData.amount': this.data.formData.purchaseChannel === 'official' ? String(priceTier) : this.data.formData.amount,
       'formData.priceTier': String(priceTier)
-    });
-  },
-
-  handleOutfieldChange(event) {
-    const outfieldOnly = event.detail.value;
-    const isConcert = this.data.formData.category === 'meet' && this.data.formData.subType === 'concert';
-    this.setData({
-      'formData.outfieldOnly': outfieldOnly,
-      'formData.includeInTotal': isConcert ? true : !outfieldOnly
     });
   },
 
   handleIncludeChange(event) {
     this.setData({
-      'formData.includeInTotal': event.detail.value,
-      'formData.outfieldOnly': !event.detail.value
+      'formData.includeInTotal': event.detail.value
     });
   },
 
   handleItemSearchInput(event) {
-    const searchKeyword = event.detail.value;
+    const rawValue =
+      event &&
+      event.detail &&
+      typeof event.detail.value !== 'undefined'
+        ? String(event.detail.value)
+        : '';
     const category = this.data.formData.category;
-    const results = expenseService.searchableItems.filter((item) => {
-      const keywordMatched = !searchKeyword || item.name.indexOf(searchKeyword) >= 0;
-      return item.mainType === category && keywordMatched;
-    });
+    const searchType = event.currentTarget.dataset.searchType || category;
+    const previousSearchKeyword =
+      searchType === 'collection' ? this.data.collectionSearchKeyword : this.data.meetSearchKeyword;
+    const searchKeyword = rawValue === 'undefined'
+      ? ''
+      : this.limitPlainText(
+          rawValue,
+          previousSearchKeyword,
+          MAX_SEARCH_LENGTH,
+          '\u641c\u7d22\u5173\u952e\u8bcd'
+        );
+    if (searchType === 'meet') {
+      this.setData({
+        searchKeyword,
+        meetSearchKeyword: searchKeyword
+      });
+      const keyword = searchKeyword.trim();
+      if (!keyword) {
+        this.setData({
+          searchResults: []
+        });
+        return searchKeyword;
+      }
+      const stageGroups = [];
+      const stageGroupMap = {};
+      (this.data.meetStages || [])
+        .filter((stage) => String(stage.stageName || '').indexOf(keyword) >= 0)
+        .forEach((stage) => {
+          const key = stage.stageName || stage.stageId;
+          if (!stageGroupMap[key]) {
+            stageGroupMap[key] = {
+              id: key,
+              type: 'stage',
+              stageName: stage.stageName,
+              highlightSegments: buildHighlightedSegments(stage.stageName, keyword),
+              displayMeta: `${getMeetStageLabel(inferMeetStageType(stage))} · ${stage.city || ''} · ${stage.venue || stage.location || ''}`,
+              stages: []
+            };
+            stageGroups.push(stageGroupMap[key]);
+          }
+          stageGroupMap[key].stages.push(stage);
+        });
+      this.setData({
+        searchResults: stageGroups.slice(0, 8)
+      });
+      return searchKeyword;
+    }
+    if (searchType === 'collection') {
+      this.setData({
+        searchKeyword,
+        collectionSearchKeyword: searchKeyword
+      });
+      if (!searchKeyword.trim()) {
+        this.setData({
+          searchResults: []
+        });
+        return searchKeyword;
+      }
+      collectionCatalogService.searchCollections(searchKeyword.trim())
+        .then((results) => {
+          if (this.data.collectionSearchKeyword !== searchKeyword) {
+            return;
+          }
+          this.setData({
+          searchResults: (results || []).slice(0, 8).map((item) => ({
+            ...item,
+            type: 'collection',
+            highlightSegments: buildHighlightedSegments(item.collectionName, searchKeyword.trim()),
+            detailText: buildCollectionDetailText(item),
+            detailSegments: buildHighlightedSegments(buildCollectionDetailText(item), searchKeyword.trim()),
+            priceDisplayText: buildCollectionPriceText(item)
+          }))
+          });
+        })
+        .catch((error) => {
+          if (this.data.collectionSearchKeyword !== searchKeyword) {
+            return;
+          }
+          wx.showToast({
+            title: error.message || '搜索藏品失败',
+            icon: 'none'
+          });
+        });
+      return searchKeyword;
+    }
     this.setData({
-      searchKeyword,
-      searchResults: results
+      searchResults: []
     });
+    return searchKeyword;
   },
 
   handleSelectSearchItem(event) {
     const { id } = event.currentTarget.dataset;
-    const item = expenseService.searchableItems.find((candidate) => candidate.id === id);
-    if (!item) {
-      return;
-    }
-    const subTypeIndex = Math.max(this.data.subTypes.findIndex((subType) => subType.id === item.subType), 0);
-    this.setData({
-      subTypeIndex,
-      'formData.subType': item.subType,
-      'formData.itemName': item.name,
-      searchKeyword: item.name,
-      searchResults: []
-    });
-  },
-
-  handleChooseImages() {
-    const remainCount = 9 - this.data.formData.images.length;
-    if (remainCount <= 0) {
-      wx.showToast({
-        title: '最多选择 9 张图片',
-        icon: 'none'
+    if (this.data.formData.category === 'meet') {
+      const group = this.data.searchResults.find((candidate) => candidate.id === id);
+      if (!group) {
+        return;
+      }
+      const stageDateOptions = group.stages || [];
+      const stageDateLabels = stageDateOptions.map((stage) => `${stage.date} ${stage.city || ''} ${stage.venue || stage.location || ''}`);
+      const firstStage = stageDateOptions[0];
+      if (!firstStage) {
+        return;
+      }
+      this.setData({
+        stageDateOptions,
+        stageDateLabels,
+        stageDateIndex: 0
+      });
+      this.applySelectedMeetStage(firstStage, {
+        stageDateOptions,
+        stageDateLabels,
+        stageDateIndex: 0,
+        meetSearchKeyword: firstStage.stageName || ''
       });
       return;
     }
-    wx.chooseMedia({
-      count: remainCount,
-      mediaType: ['image'],
-      sourceType: ['album', 'camera'],
-      success: (res) => {
-        const nextImages = [
-          ...this.data.formData.images,
-          ...res.tempFiles.map((file) => file.tempFilePath)
-        ].slice(0, 9);
-        this.setData({
-          'formData.images': nextImages
-        });
+    if (this.data.formData.category === 'collection') {
+      const item = this.data.searchResults.find((candidate) => candidate.collectionId === id);
+      if (!item) {
+        return;
       }
-    });
-  },
-
-  handleRemoveImage(event) {
-    const index = Number(event.currentTarget.dataset.index);
-    const nextImages = this.data.formData.images.filter((_, imageIndex) => imageIndex !== index);
-    this.setData({
-      'formData.images': nextImages
-    });
+      const categoryIndex = Math.max(
+        this.data.categories.findIndex((candidate) => candidate.id === 'collection'),
+        0
+      );
+      const category = this.data.categories[categoryIndex];
+      const subType = expenseService.inferCollectionSubType(item);
+      const subTypeIndex = Math.max(
+        (category.subTypes || []).findIndex((candidate) => candidate.id === subType),
+        0
+      );
+      const referencePrice = item.referencePrice === null || typeof item.referencePrice === 'undefined'
+        ? ''
+        : String(item.referencePrice);
+      this.setData({
+        categoryIndex,
+        subTypes: category.subTypes || [],
+        subTypeIndex,
+        'formData.category': 'collection',
+        'formData.subType': (category.subTypes[subTypeIndex] || {}).id || subType,
+        'formData.collectionId': item.collectionId,
+        'formData.itemName': item.collectionName,
+        'formData.referencePrice': referencePrice,
+        'formData.amount': referencePrice,
+        'formData.unitPrice': referencePrice,
+        'formData.expenseSource': 'collection',
+        searchKeyword: item.collectionName || '',
+        collectionSearchKeyword: item.collectionName || '',
+        selectedCollectionMeta: [buildCollectionDetailText(item), buildCollectionPriceText(item)]
+          .filter(Boolean)
+          .join(' · '),
+        searchResults: []
+      });
+      return;
+    }
+    return;
   },
 
   async handleSubmitForm() {
-    const result =
-      this.data.formMode === 'edit'
-        ? await expenseService.updateExpenseAsync(this.data.formData.expenseId, this.data.formData)
-        : await expenseService.addExpenseAsync(this.data.formData);
-
-    if (!result.valid) {
-      wx.showToast({
-        title: result.message,
-        icon: 'none'
-      });
+    if (this.data.formSubmitting) {
       return;
     }
 
-    wx.showToast({
-      title: this.data.formMode === 'edit' ? '已保存' : '已新增',
-      icon: 'success'
-    });
-    this.setData({
-      formVisible: false
-    });
-    this.refreshPage();
+    this.setData({ formSubmitting: true });
+
+    try {
+      const result =
+        this.data.formMode === 'edit'
+          ? await expenseService.updateExpenseAsync(this.data.formData.expenseId, this.data.formData)
+          : await expenseService.addExpenseAsync(this.data.formData);
+
+      if (!result.valid) {
+        wx.showToast({
+          title: result.message,
+          icon: 'none'
+        });
+        return;
+      }
+
+      wx.showToast({
+        title: this.data.formMode === 'edit' ? '已保存' : '已新增',
+        icon: 'success'
+      });
+      this.setData({
+        formVisible: false
+      });
+      this.refreshPage();
+    } finally {
+      this.setData({ formSubmitting: false });
+    }
   },
 
   handleDeleteExpense(event) {
     const expenseId = event.currentTarget.dataset.id;
+    const expense = this.data.expenses.find((item) => item.expenseId === expenseId) || null;
     wx.showModal({
       title: '删除消费记录',
       content: '删除后无法在本地恢复，确定要删除吗？',
@@ -556,7 +1123,7 @@ Page({
           return;
         }
         try {
-          await expenseService.removeExpenseAsync(expenseId);
+          await expenseService.removeExpenseAsync(expenseId, expense);
           wx.showToast({
             title: '已删除',
             icon: 'success'
@@ -570,6 +1137,82 @@ Page({
         }
       }
     });
+  },
+
+  showInputLimitToast(title) {
+    const now = Date.now();
+    if (now - (this.inputLimitToastAt || 0) < 1200) {
+      return;
+    }
+    this.inputLimitToastAt = now;
+    wx.showToast({
+      title,
+      icon: 'none'
+    });
+  },
+
+  limitPlainText(value, previousValue, maxLength, fieldName) {
+    const nextValue = String(value || '');
+    if (nextValue.length <= maxLength) {
+      return nextValue;
+    }
+    this.showInputLimitToast(`${fieldName}\u4e0a\u9650\u4e3a ${maxLength} \u4e2a\u5b57`);
+    return String(previousValue || '');
+  },
+
+  sanitizeAmountInput(value, previousValue) {
+    const nextValue = String(value || '');
+    const previous = String(previousValue || '');
+    if (!nextValue) {
+      return '';
+    }
+    if (!/^\d*(\.\d{0,2})?$/.test(nextValue)) {
+      this.showInputLimitToast('\u91d1\u989d\u6700\u591a\u4fdd\u7559 2 \u4f4d\u5c0f\u6570');
+      return previous;
+    }
+    const amount = Number(nextValue);
+    if (Number.isFinite(amount) && amount > MAX_AMOUNT) {
+      this.showInputLimitToast(`\u91d1\u989d\u4e0a\u9650\u4e3a ${MAX_AMOUNT}`);
+      return previous;
+    }
+    return nextValue;
+  },
+
+  sanitizeQuantityInput(value, previousValue) {
+    const nextValue = String(value || '');
+    const previous = String(previousValue || '');
+    if (!nextValue) {
+      return '';
+    }
+    if (!/^\d+$/.test(nextValue)) {
+      this.showInputLimitToast('\u6570\u91cf\u53ea\u80fd\u586b\u5199\u6574\u6570');
+      return previous;
+    }
+    const quantity = Number(nextValue);
+    if (quantity > MAX_COLLECTION_QUANTITY) {
+      this.showInputLimitToast(`\u85cf\u54c1\u6570\u91cf\u4e0a\u9650\u4e3a ${MAX_COLLECTION_QUANTITY}`);
+      return previous;
+    }
+    return nextValue;
+  },
+
+  sanitizeFormInput(field, value) {
+    const previousValue = this.data.formData[field];
+    if (field === 'amount') {
+      return this.sanitizeAmountInput(value, previousValue);
+    }
+    if (field === 'quantity') {
+      return this.sanitizeQuantityInput(value, previousValue);
+    }
+    if (TEXT_FIELD_LIMITS[field]) {
+      return this.limitPlainText(
+        value,
+        previousValue,
+        TEXT_FIELD_LIMITS[field],
+        TEXT_FIELD_NAMES[field] || field
+      );
+    }
+    return value;
   },
 
   noop() {},

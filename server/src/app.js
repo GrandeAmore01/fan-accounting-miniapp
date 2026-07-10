@@ -7,6 +7,8 @@ const expenseRoutes = require('./routes/expenses');
 const stageRoutes = require('./routes/stages');
 const collectionRoutes = require('./routes/collections');
 const userCollectionRoutes = require('./routes/userCollections');
+const userStageRoutes = require('./routes/userStages');
+const stageNoteRoutes = require('./routes/stageNotes');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -26,6 +28,8 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/stages', stageRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/user-collections', userCollectionRoutes);
+app.use('/api/user-stages', userStageRoutes);
+app.use('/api/stage-notes', stageNoteRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

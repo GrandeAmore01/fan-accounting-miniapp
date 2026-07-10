@@ -70,28 +70,15 @@
     </view>
   </view>
 
-  <view class="card">
-    <view class="section-head">
-      <text class="card-title">回忆照片</text>
-      <text class="muted">最多 {{detail.note.photos.length || 0}}/9 张</text>
-    </view>
-    <view class="photo-grid">
-      <image
-        wx:for="{{detail.note.photos}}"
-        wx:key="*this"
-        class="photo-item"
-        src="{{item}}"
-        mode="aspectFill"
-        data-url="{{item}}"
-        bindtap="handlePreviewPhoto"
-        bindlongpress="handleRemovePhoto"
-      />
-      <view class="photo-add" bindtap="handleChoosePhotos">+</view>
-    </view>
-    <text class="muted photo-tip">长按照片可删除</text>
-  </view>
-
   <button wx:if="{{!detail.isLighted}}" class="primary-button" bindtap="handleLightStage">点亮这场</button>
   <button wx:else class="secondary-button" bindtap="handleUnlightStage">取消点亮</button>
   </block>
+
+  <meet-expense-modal
+    wx:if="{{expenseModalVisible}}"
+    visible="{{expenseModalVisible}}"
+    stage-id="{{stageId}}"
+    bind:close="handleCloseExpenseModal"
+    bind:success="handleExpenseModalSuccess"
+  />
 </view>

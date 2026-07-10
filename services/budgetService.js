@@ -470,6 +470,11 @@ function getBudgetDashboard(budgetType = 'month', period = getDefaultPeriod(budg
   };
 }
 
+async function getBudgetDashboardAsync(budgetType = 'month', period = getDefaultPeriod(budgetType)) {
+  await expenseService.listExpensesAsync();
+  return getBudgetDashboard(budgetType, period);
+}
+
 module.exports = {
   expenseCategories: expenseTypes,
   getBudgetTargets,
@@ -488,5 +493,6 @@ module.exports = {
   getBudgetHistory,
   getBudgetInsight,
   getMonthTrend,
-  getBudgetDashboard
+  getBudgetDashboard,
+  getBudgetDashboardAsync
 };
