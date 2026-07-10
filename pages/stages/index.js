@@ -5,7 +5,7 @@ Page({
     loading: true,
     stageTypeOptions: [
       { id: 'concert', name: '演唱会' },
-      { id: 'festival', name: '音乐节|拼盘' }
+      { id: 'special', name: '运动会/新年音乐会' }
     ],
     stageTypeIndex: 0,
     yearOptions: [{ id: 'all', name: '全部年份' }],
@@ -145,7 +145,11 @@ Page({
 
   handleLightStage(event) {
     const { id } = event.currentTarget.dataset;
-    const result = stageService.lightStage(id);
+    this.lightStageById(id);
+  },
+
+  async lightStageById(id) {
+    const result = await stageService.lightStage(id);
     if (!result.valid) {
       wx.showToast({ title: result.message, icon: 'none' });
       return;
@@ -193,19 +197,20 @@ Page({
   },
 
   createExpenseFromStage(stageId, priceTier) {
-    const expenseResult = stageService.createExpenseFromStage(stageId, priceTier);
-    wx.showToast({
-      title: expenseResult.valid ? '已生成记录' : expenseResult.message,
-      icon: expenseResult.valid ? 'success' : 'none'
+    stageService.createExpenseFromStage(stageId, priceTier).then((expenseResult) => {
+      wx.showToast({
+        title: expenseResult.valid ? '已生成记录' : expenseResult.message,
+        icon: expenseResult.valid ? 'success' : 'none'
+      });
+      this.refreshPage();
     });
-    this.refreshPage();
   },
 
   handleUnlightStage(event) {
     const { id } = event.currentTarget.dataset;
     stageService.confirmUnlightStage(id, {
       onDone: () => {
-        this.refreshPage();
+        this.loadPage();
       }
     });
   }

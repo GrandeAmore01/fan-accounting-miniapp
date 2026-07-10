@@ -26,6 +26,20 @@ function formatDateText(value) {
   return `${year}-${month}-${day}`;
 }
 
+function resolveStageTypeName(stageName, stageType) {
+  const name = stageName || '';
+  if (name.includes('新年音乐会')) {
+    return '新年音乐会';
+  }
+  if (name.includes('运动会')) {
+    return '运动会';
+  }
+  if (stageType === 'festival') {
+    return '音乐节/拼盘';
+  }
+  return '演唱会';
+}
+
 function rowToStage(row, songs = [], album = null) {
   const songList = songs.map((item) => item.songName);
   const priceTiers = parseJson(row.price_tiers_json, []);
@@ -53,7 +67,7 @@ function rowToStage(row, songs = [], album = null) {
     priceTierText: priceTiers.map((price) => `${price}元`).join(' / '),
     cityName: row.city || row.location || '未填写城市',
     venueName: row.venue || row.stage_name || '未填写场馆',
-    stageTypeName: row.stage_type === 'festival' ? '音乐节/拼盘' : '演唱会'
+    stageTypeName: resolveStageTypeName(row.stage_name, row.stage_type)
   };
 }
 

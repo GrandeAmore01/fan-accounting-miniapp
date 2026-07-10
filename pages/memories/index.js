@@ -5,7 +5,7 @@ Page({
     loading: true,
     typeOptions: [
       { id: 'concert', name: '演唱会' },
-      { id: 'festival', name: '音乐节/拼盘' }
+      { id: 'special', name: '运动会/新年音乐会' }
     ],
     activeTypeIndex: 0,
     yearOptions: [],

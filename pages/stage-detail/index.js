@@ -76,9 +76,9 @@ Page({
     });
   },
 
-  handleSaveNote() {
+  async handleSaveNote() {
     const { noteForm, stageId, detail } = this.data;
-    const result = stageService.saveStageNote(stageId, {
+    const result = await stageService.saveStageNote(stageId, {
       ...noteForm,
       photos: detail.note.photos || []
     });
@@ -102,9 +102,9 @@ Page({
       count: remain,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
-      success: (res) => {
+      success: async (res) => {
         const paths = (res.tempFiles || []).map((item) => item.tempFilePath);
-        stageService.addStagePhotos(this.data.stageId, paths);
+        await stageService.addStagePhotos(this.data.stageId, paths);
         wx.showToast({ title: '已添加', icon: 'success' });
         this.loadDetail();
       }
@@ -125,19 +125,19 @@ Page({
     wx.showModal({
       title: '删除照片',
       content: '确定删除这张照片吗？',
-      success: (res) => {
+      success: async (res) => {
         if (!res.confirm) {
           return;
         }
-        stageService.removeStagePhoto(this.data.stageId, url);
+        await stageService.removeStagePhoto(this.data.stageId, url);
         wx.showToast({ title: '已删除', icon: 'success' });
         this.loadDetail();
       }
     });
   },
 
-  handleLightStage() {
-    const result = stageService.lightStage(this.data.stageId);
+  async handleLightStage() {
+    const result = await stageService.lightStage(this.data.stageId);
     if (!result.valid) {
       wx.showToast({ title: result.message, icon: 'none' });
       return;
@@ -169,8 +169,8 @@ Page({
 
   createExpense(stage) {
     stageService.promptPriceTier(stage, {
-      onSelect: (priceTier) => {
-        const result = stageService.createExpenseFromStage(stage.stageId, priceTier);
+      onSelect: async (priceTier) => {
+        const result = await stageService.createExpenseFromStage(stage.stageId, priceTier);
         wx.showToast({
           title: result.valid ? '已生成记录' : result.message,
           icon: result.valid ? 'success' : 'none'
