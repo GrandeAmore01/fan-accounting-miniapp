@@ -17,18 +17,27 @@
   </scroll-view>
 
   <view class="stats-card">
-    <view
-      class="stat-item {{activeCategoryIndex === index ? 'stat-item-active' : ''}}"
-      wx:for="{{categoryStats}}"
-      wx:key="id"
-      data-index="{{index}}"
-      bindtap="handleCategoryTabChange"
-    >
-      <text class="stat-value">{{index === 0 ? summary.totalAmountText : item.count}}</text>
-      <text class="stat-label">{{item.name}}</text>
+    <view class="amount-summary">
+      <text class="amount-summary-label">{{activeSummary.name}}</text>
+      <view class="amount-summary-value">
+        <text class="amount-symbol">¥</text>
+        <text class="amount-number">{{activeSummary.amountText}}</text>
+      </view>
+    </view>
+    <view class="count-summary-grid">
+      <view
+        class="stat-item {{activeCategoryIndex === index ? 'stat-item-active' : ''}}"
+        wx:for="{{categoryStats}}"
+        wx:key="id"
+        data-index="{{index}}"
+        bindtap="handleCategoryTabChange"
+      >
+        <text class="stat-value">{{item.count}}</text>
+        <text class="stat-label">{{item.name}}</text>
+      </view>
     </view>
   </view>
-  <view class="summary-hint">实际支出 ¥{{summary.actualAmountText}}</view>
+  <view class="summary-hint">实际支出 ¥{{activeSummary.actualAmountText}}</view>
 
   <view class="filter-card">
     <view class="filter-row">
@@ -44,7 +53,7 @@
         <switch checked="{{showActualAmount}}" color="#D6A400" bindchange="handleShowActualAmountChange" />
       </view>
     </view>
-    <input class="search-input" value="{{keyword}}" maxlength="40" placeholder="搜索名称 / 地点 / 备注 / 日期" bindinput="handleKeywordInput" />
+    <input class="search-input" value="{{keyword}}" placeholder="搜索名称 / 地点 / 备注 / 日期" bindinput="handleKeywordInput" />
   </view>
 
   <button class="add-expense-button" bindtap="handleOpenCreate">添加消费记录</button>
@@ -66,7 +75,7 @@
   </view>
 
   <view class="toolbar card legacy-toolbar">
-    <input class="search-input" value="{{keyword}}" maxlength="40" placeholder="搜索项目或备注" bindinput="handleKeywordInput" />
+    <input class="search-input" value="{{keyword}}" placeholder="搜索项目或备注" bindinput="handleKeywordInput" />
     <picker mode="selector" range="{{filterCategories}}" range-key="name" value="{{filterCategoryIndex}}" bindchange="handleFilterCategoryChange">
       <view class="picker-field">{{filterCategories[filterCategoryIndex].name}}</view>
     </picker>
@@ -170,7 +179,7 @@
         </view>
         <view class="form-field">
           <text class="field-label">{{subTypes[subTypeIndex].name}}名称</text>
-          <input class="form-input" maxlength="40" placeholder="搜索云端演唱会名称" confirm-type="search" data-search-type="meet" bindinput="handleItemSearchInput" />
+          <input class="form-input" placeholder="搜索云端演唱会名称" confirm-type="search" data-search-type="meet" bindinput="handleItemSearchInput" />
           <view class="search-result" wx:for="{{searchResults}}" wx:key="id" data-id="{{item.id}}" bindtap="handleSelectSearchItem">
             <view>
               <text wx:for="{{item.highlightSegments}}" wx:for-item="segment" wx:key="index" class="{{segment.matched ? 'search-hit' : ''}}">{{segment.text}}</text>
@@ -186,7 +195,7 @@
         </view>
         <view class="form-field">
           <text class="field-label">已选名称</text>
-          <input class="form-input" value="{{formData.itemName}}" maxlength="80" data-field="itemName" placeholder="可手动填写名称" bindinput="handleFormInput" />
+          <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="可手动填写名称" bindinput="handleFormInput" />
         </view>
         <view class="form-field">
           <text class="field-label">购买渠道</text>
@@ -207,22 +216,22 @@
         <view class="field-grid">
           <view class="form-field">
             <text class="field-label">城市（选填）</text>
-            <input class="form-input" value="{{formData.city}}" maxlength="120" data-field="city" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
+            <input class="form-input" value="{{formData.city}}" data-field="city" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
           </view>
           <view class="form-field">
             <text class="field-label">地点（选填）</text>
-            <input class="form-input" value="{{formData.location}}" maxlength="120" data-field="location" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
+            <input class="form-input" value="{{formData.location}}" data-field="location" placeholder="匹配场次后自动带入" bindinput="handleFormInput" />
           </view>
           <view class="form-field">
             <text class="field-label">座位（选填）</text>
-            <input class="form-input" value="{{formData.seat}}" maxlength="120" data-field="seat" placeholder="例如：A区 12排 08座" bindinput="handleFormInput" />
+            <input class="form-input" value="{{formData.seat}}" data-field="seat" placeholder="例如：A区 12排 08座" bindinput="handleFormInput" />
           </view>
         </view>
       </view>
 
       <view wx:elif="{{formData.category === 'collection'}}" class="form-section">
         <text class="section-title">藏品信息</text>
-        <input class="form-input" maxlength="40" placeholder="搜索云端藏品名称" confirm-type="search" data-search-type="collection" bindinput="handleItemSearchInput" />
+        <input class="form-input" placeholder="搜索云端藏品名称" confirm-type="search" data-search-type="collection" bindinput="handleItemSearchInput" />
         <view class="search-result" wx:for="{{searchResults}}" wx:key="collectionId" data-id="{{item.collectionId}}" bindtap="handleSelectSearchItem">
           <view>
             <text wx:for="{{item.highlightSegments}}" wx:for-item="segment" wx:key="index" class="{{segment.matched ? 'search-hit' : ''}}">{{segment.text}}</text>
@@ -237,7 +246,7 @@
         </view>
         <view class="form-field">
           <text class="field-label">藏品名称</text>
-          <input class="form-input" value="{{formData.itemName}}" maxlength="80" data-field="itemName" placeholder="可手动填写，未选择候选则不联动藏品" bindinput="handleFormInput" />
+          <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="可手动填写，未选择候选则不联动藏品" bindinput="handleFormInput" />
         </view>
         <view class="field-grid">
           <view class="form-field">
@@ -261,7 +270,7 @@
 
       <view wx:else class="form-field">
         <text class="field-label">项目名称</text>
-        <input class="form-input" value="{{formData.itemName}}" maxlength="80" data-field="itemName" placeholder="例如：酒店、车票、餐饮或其他消费" bindinput="handleFormInput" />
+        <input class="form-input" value="{{formData.itemName}}" data-field="itemName" placeholder="例如：酒店、车票、餐饮或其他消费" bindinput="handleFormInput" />
       </view>
 
       <view class="field-grid" wx:if="{{formData.category === 'collection'}}">
@@ -271,7 +280,7 @@
         </view>
         <view class="form-field">
           <text class="field-label">数量</text>
-          <input class="form-input" type="number" inputmode="numeric" maxlength="3" value="{{formData.quantity}}" data-field="quantity" placeholder="1" bindinput="handleFormInput" />
+          <input class="form-input" type="number" inputmode="numeric" value="{{formData.quantity}}" data-field="quantity" placeholder="1" bindinput="handleFormInput" />
         </view>
       </view>
       <view class="form-field" wx:elif="{{formData.category !== 'meet'}}">
@@ -281,7 +290,7 @@
 
       <view class="form-field">
         <text class="field-label">备注</text>
-        <input class="form-input" value="{{formData.remark}}" maxlength="160" data-field="remark" placeholder="选填，例如购买渠道、票务来源、追星感受" bindinput="handleFormInput" />
+        <input class="form-input" value="{{formData.remark}}" data-field="remark" placeholder="选填，例如购买渠道、票务来源、追星感受" bindinput="handleFormInput" />
       </view>
 
       <view class="switch-row">
