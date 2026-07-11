@@ -3,6 +3,7 @@ const expenseService = require('../../services/expenseService');
 const budgetService = require('../../services/budgetService');
 const collectionService = require('../../services/collectionService');
 const stageService = require('../../services/stageService');
+const profileService = require('../../services/profileService');
 
 function formatMoney(value) {
   return Number(value || 0).toFixed(2);
@@ -16,7 +17,8 @@ function formatSyncTime(date = new Date()) {
 
 Page({
   data: {
-    profile: { nickname: '微信用户', loginStatus: false },
+    profile: { nickname: '微信用户', avatarFileId: '', avatarUrl: '', loginStatus: false },
+    savingProfile: false,
     loading: true,
     overview: {
       expenseCount: 0,
@@ -59,10 +61,14 @@ Page({
     });
 
     try {
-      const [dashboard, collections] = await Promise.all([
+      const [dashboard, collections, , cloudProfile] = await Promise.all([
         budgetService.getBudgetDashboardAsync('month', budgetService.getCurrentMonth()),
         collectionService.listCollections(),
-        stageService.ensureStagesLoaded()
+        stageService.ensureStagesLoaded(),
+        profileService.getProfile().then(async (profile) => ({
+          ...profile,
+          avatarUrl: await profileService.getTempFileUrl(profile.avatarFileId).catch(() => '')
+        }))
       ]);
       const expenseSummary = expenseService.getExpenseSummary();
       const stageStats = stageService.getStageStats();
@@ -72,7 +78,12 @@ Page({
 
       this.setData({
         loading: false,
-        profile: storageService.getLocalDataSummary().profile,
+        profile: {
+          nickname: cloudProfile.displayName || '微信用户',
+          avatarFileId: cloudProfile.avatarFileId || '',
+          avatarUrl: cloudProfile.avatarUrl || '',
+          loginStatus: true
+        },
         overview: {
           expenseCount: Number(expenseSummary.count || 0),
           totalAmountText: formatMoney(expenseSummary.totalAmount),
@@ -101,9 +112,16 @@ Page({
       console.warn('个人数据同步失败，显示最近缓存', error);
       const cached = storageService.getLocalDataSummary();
       const cachedExpenses = storageService.getCollection(null, 'expenses');
+      const cachedAvatarFileId = cached.profile.avatarFileId || '';
+      const cachedAvatarUrl = await profileService.getTempFileUrl(cachedAvatarFileId).catch(() => '');
       this.setData({
         loading: false,
-        profile: cached.profile,
+        profile: {
+          ...cached.profile,
+          nickname: cached.profile.displayName || cached.profile.nickname || '微信用户',
+          avatarFileId: cachedAvatarFileId,
+          avatarUrl: cachedAvatarUrl
+        },
         overview: {
           expenseCount: cached.counts.expenses,
           totalAmountText: formatMoney(
@@ -125,6 +143,72 @@ Page({
   handleNavigate(event) {
     const url = event.currentTarget.dataset.url;
     if (url) wx.switchTab({ url });
+  },
+
+  async handleChooseAvatar(event) {
+    if (this.data.savingProfile) return;
+    const filePath = event.detail.avatarUrl;
+    if (!filePath) return;
+
+    const oldAvatarFileId = this.data.profile.avatarFileId || '';
+    let newAvatarFileId = '';
+    this.setData({ savingProfile: true });
+    wx.showLoading({ title: '正在上传头像' });
+    try {
+      newAvatarFileId = await profileService.uploadAvatar(filePath);
+      const saved = await profileService.saveProfile({ avatarFileId: newAvatarFileId });
+      const avatarUrl = await profileService.getTempFileUrl(saved.avatarFileId);
+      this.setData({
+        'profile.avatarFileId': saved.avatarFileId,
+        'profile.avatarUrl': avatarUrl
+      });
+      if (oldAvatarFileId && oldAvatarFileId !== saved.avatarFileId) {
+        profileService.deleteFile(oldAvatarFileId);
+      }
+      wx.showToast({ title: '头像已更新', icon: 'success' });
+    } catch (error) {
+      if (newAvatarFileId) profileService.deleteFile(newAvatarFileId);
+      wx.showToast({ title: error.message || '头像更新失败', icon: 'none' });
+    } finally {
+      wx.hideLoading();
+      this.setData({ savingProfile: false });
+    }
+  },
+
+  handleEditNickname() {
+    if (this.data.savingProfile) return;
+    wx.showModal({
+      title: '编辑昵称',
+      content: this.data.profile.nickname || '',
+      editable: true,
+      placeholderText: '请输入1至20个字符',
+      confirmText: '保存',
+      confirmColor: '#b48a00',
+      success: async (result) => {
+        if (!result.confirm) return;
+        const displayName = String(result.content || '').trim();
+        if (!displayName) {
+          wx.showToast({ title: '昵称不能为空', icon: 'none' });
+          return;
+        }
+        if (Array.from(displayName).length > 20) {
+          wx.showToast({ title: '昵称不能超过20个字符', icon: 'none' });
+          return;
+        }
+        this.setData({ savingProfile: true });
+        wx.showLoading({ title: '正在保存' });
+        try {
+          const saved = await profileService.saveProfile({ displayName });
+          this.setData({ 'profile.nickname': saved.displayName });
+          wx.showToast({ title: '昵称已更新', icon: 'success' });
+        } catch (error) {
+          wx.showToast({ title: error.message || '昵称保存失败', icon: 'none' });
+        } finally {
+          wx.hideLoading();
+          this.setData({ savingProfile: false });
+        }
+      }
+    });
   },
 
   handleSyncTap() {

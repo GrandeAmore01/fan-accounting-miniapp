@@ -7,6 +7,8 @@ USE fan_accounting;
 CREATE TABLE IF NOT EXISTS users (
   user_id VARCHAR(64) COLLATE utf8mb4_bin PRIMARY KEY,
   openid VARCHAR(128) NULL UNIQUE,
+  display_name VARCHAR(40) COLLATE utf8mb4_unicode_ci NULL,
+  avatar_file_id VARCHAR(500) COLLATE utf8mb4_bin NULL,
   nickname VARCHAR(100) NOT NULL,
   login_status TINYINT(1) NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

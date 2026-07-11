@@ -14,11 +14,29 @@
   box-shadow: 0 12rpx 32rpx rgba(127, 93, 0, 0.09);
 }
 
-.avatar-placeholder {
+.avatar-button {
+  position: relative;
+  flex: 0 0 112rpx;
+  width: 112rpx !important;
+  height: 112rpx;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  line-height: 1;
+}
+
+.avatar-button::after {
+  border: 0;
+}
+
+.avatar-placeholder,
+.avatar-image {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 112rpx;
   width: 112rpx;
   height: 112rpx;
   border: 6rpx solid rgba(255, 255, 255, 0.85);
@@ -27,6 +45,25 @@
   color: #2c2405;
   font-size: 42rpx;
   font-weight: 700;
+}
+
+.avatar-image {
+  display: block;
+  background: #fff8d8;
+}
+
+.avatar-edit-badge {
+  position: absolute;
+  right: -8rpx;
+  bottom: -4rpx;
+  min-width: 52rpx;
+  padding: 7rpx 10rpx;
+  border: 3rpx solid #fffdf4;
+  border-radius: 999rpx;
+  background: #2f291a;
+  color: #ffffff;
+  font-size: 18rpx;
+  line-height: 1;
 }
 
 .profile-main {
@@ -39,6 +76,21 @@
   color: #262015;
   font-size: 36rpx;
   font-weight: 700;
+}
+
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.profile-edit {
+  flex: 0 0 auto;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(180, 138, 0, 0.12);
+  color: #957300;
+  font-size: 20rpx;
 }
 
 .profile-sync-line {
