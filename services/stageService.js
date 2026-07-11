@@ -996,25 +996,24 @@ function clearStageExpenseLink(stageId, expenseId) {
 function confirmUnlightStage(stageId, callbacks = {}) {
   const hasLinkedExpense = hasStageLinkedExpense(stageId);
   wx.showModal({
-    title: '取消点亮',
+    title: '\u53d6\u6d88\u70b9\u4eae',
     content: hasLinkedExpense
-      ? '取消点亮后，是否同时删除这条舞台同步生成的消费记录？'
-      : '取消后会同步更新歌曲统计和专辑进度，确定要取消吗？',
-    cancelText: hasLinkedExpense ? '保留记录' : '再想想',
-    confirmText: hasLinkedExpense ? '删除记录' : '取消点亮',
+      ? '\u53d6\u6d88\u70b9\u4eae\u5c06\u540c\u65f6\u5220\u9664\u5173\u8054\u7684\u6d88\u8d39\u8bb0\u5f55\uff0c\u786e\u5b9a\u7ee7\u7eed\u5417\uff1f'
+      : '\u53d6\u6d88\u540e\u4f1a\u540c\u6b65\u66f4\u65b0\u6b4c\u66f2\u7edf\u8ba1\u548c\u4e13\u8f91\u8fdb\u5ea6\uff0c\u786e\u5b9a\u8981\u53d6\u6d88\u5417\uff1f',
+    cancelText: '\u518d\u60f3\u60f3',
+    confirmText: '\u53d6\u6d88\u70b9\u4eae',
     confirmColor: '#c84d69',
     success: async (res) => {
-      if (!res.confirm && !hasLinkedExpense) {
+      if (!res.confirm) {
         return;
       }
-      await unlightStage(stageId, { deleteExpense: hasLinkedExpense && res.confirm });
-      const deletedExpense = hasLinkedExpense && res.confirm;
+      await unlightStage(stageId, { deleteExpense: hasLinkedExpense });
       wx.showToast({
-        title: deletedExpense ? '已删除记录' : '已取消点亮',
+        title: hasLinkedExpense ? '\u5df2\u53d6\u6d88\u5e76\u5220\u9664' : '\u5df2\u53d6\u6d88\u70b9\u4eae',
         icon: 'success'
       });
       if (callbacks.onDone) {
-        callbacks.onDone({ deletedExpense });
+        callbacks.onDone({ deletedExpense: hasLinkedExpense });
       }
     }
   });

@@ -165,35 +165,6 @@ async function syncDeletedStageLink(connection, expense) {
   );
 }
 
-async function syncDeletedCollectionLink(connection, expense) {
-  if (!expense.collectionId) {
-    return;
-  }
-
-  const [remainingRows] = await connection.execute(
-    `SELECT expense_id
-     FROM expenses
-     WHERE user_id = ?
-       AND collection_id = ?
-     LIMIT 1`,
-    [expense.userId, expense.collectionId]
-  );
-
-  if (remainingRows.length) {
-    return;
-  }
-
-  await connection.execute(
-    `INSERT INTO user_collections (
-       user_id, collection_id, is_owned, light_time
-     ) VALUES (?, ?, 0, NULL)
-     ON DUPLICATE KEY UPDATE
-       is_owned = 0,
-       light_time = NULL`,
-    [expense.userId, expense.collectionId]
-  );
-}
-
 router.get('/meet-stages', async (req, res, next) => {
   try {
     const [rows] = await pool.execute(
@@ -397,7 +368,6 @@ router.put('/:expenseId', async (req, res, next) => {
 
       if (result.affectedRows) {
         await clearPreviousStageLink(connection, expense);
-        await syncLinkedCollection(connection, expense);
         await syncLinkedStage(connection, expense);
       }
 
@@ -454,7 +424,6 @@ router.delete('/:expenseId', async (req, res, next) => {
 
     if (result.affectedRows) {
       await syncDeletedStageLink(connection, removedExpense);
-      await syncDeletedCollectionLink(connection, removedExpense);
     }
 
     await connection.commit();
