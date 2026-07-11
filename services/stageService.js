@@ -158,6 +158,8 @@ async function loadUserStateFromCloud() {
         actualTicketPrice: userState ? userState.actualTicketPrice : 0
       });
     });
+    storageService.setCollection(USER_ID, 'userStages', userStages || []);
+    storageService.setCollection(USER_ID, 'stageNotes', stageNotes || []);
   } catch (error) {
     console.warn('舞台用户状态 API 加载失败', error);
     userStateByStageId = {};

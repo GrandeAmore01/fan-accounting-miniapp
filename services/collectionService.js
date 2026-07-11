@@ -1,6 +1,7 @@
 const apiService = require('./apiService');
 const collectionCatalogService = require('./collectionCatalogService');
 const config = require('./config');
+const storageService = require('./storageService');
 
 const USER_ID = config.userId || 'local-user';
 const COLLECTION_API_BASE_URL = config.collectionApiBaseUrl || config.apiBaseUrl;
@@ -36,7 +37,7 @@ async function listCollections() {
     })
   ]);
   const states = new Map((userStates || []).map((item) => [String(item.collectionId), item]));
-  return (catalog || []).map((item) => {
+  const collections = (catalog || []).map((item) => {
     const normalized = normalizeCollection(item);
     const state = states.get(normalized.collectionId);
     return {
@@ -45,6 +46,8 @@ async function listCollections() {
       lightTime: state ? state.lightTime || '' : ''
     };
   });
+  storageService.setCollection(USER_ID, 'userCollections', collections);
+  return collections;
 }
 
 function setOwned(collectionId, isOwned) {

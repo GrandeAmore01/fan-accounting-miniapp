@@ -1,30 +1,15 @@
 const storageService = require('../../services/storageService');
 const stageService = require('../../services/stageService');
-const config = require('../../services/config');
-
-const USER_ID = config.userId || 'local-user';
 
 Page({
   data: {
-    profile: {
-      nickname: '本地用户',
-      loginStatus: false
-    },
+    profile: { nickname: '微信用户', loginStatus: false },
     counts: {
-      expenses: 0,
-      budgets: 0,
-      userCollections: 0,
-      lightedCollections: 0,
-      userStages: 0,
-      lightedStages: 0
+      expenses: 0, budgets: 0, userCollections: 0,
+      lightedCollections: 0, userStages: 0, lightedStages: 0
     },
     hasLocalData: false,
-    cloudStatus: {
-      enabled: false,
-      loginReady: false,
-      databaseReady: false,
-      message: ''
-    }
+    cloudStatus: { enabled: true, loginReady: false, databaseReady: false, message: '' }
   },
 
   onShow() {
@@ -32,7 +17,7 @@ Page({
   },
 
   async refreshPage() {
-    const summary = storageService.getLocalDataSummary(USER_ID);
+    const summary = storageService.getLocalDataSummary();
     let stageStats = {
       lightedCount: summary.counts.lightedStages,
       total: summary.counts.userStages
@@ -55,16 +40,9 @@ Page({
     });
   },
 
-  handleLocalModeTap() {
-    wx.showToast({
-      title: '当前为本地模式',
-      icon: 'none'
-    });
-  },
-
-  handleCloudReserveTap() {
+  handleCloudStatusTap() {
     wx.showModal({
-      title: '云开发预留',
+      title: '云端同步状态',
       content: this.data.cloudStatus.message,
       showCancel: false,
       confirmText: '知道了',
@@ -73,28 +51,15 @@ Page({
   },
 
   handleClearLocalData() {
-    if (!this.data.hasLocalData) {
-      wx.showToast({
-        title: '暂无本地数据',
-        icon: 'none'
-      });
-      return;
-    }
-
     wx.showModal({
-      title: '清理本地数据',
-      content: '将清空消费记录、预算、图鉴点亮和舞台点亮状态，确定继续吗？',
-      confirmText: '清空',
+      title: '清理本地缓存',
+      content: '只清理当前微信用户在本机的缓存，不会删除云端消费、预算、藏品或舞台数据。下次打开页面时会重新从云端加载。',
+      confirmText: '清理缓存',
       confirmColor: '#c84d69',
       success: (res) => {
-        if (!res.confirm) {
-          return;
-        }
-        storageService.resetUserData(USER_ID);
-        wx.showToast({
-          title: '已清空',
-          icon: 'success'
-        });
+        if (!res.confirm) return;
+        storageService.resetUserData();
+        wx.showToast({ title: '缓存已清理', icon: 'success' });
         this.refreshPage();
       }
     });

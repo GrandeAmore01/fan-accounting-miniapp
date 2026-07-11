@@ -1,6 +1,7 @@
 const expenseService = require('./expenseService');
 const storageService = require('./storageService');
 const config = require('./config');
+const apiService = require('./apiService');
 
 const USER_ID = config.userId || 'local-user';
 const DEFAULT_THRESHOLD = 0.8;
@@ -130,6 +131,50 @@ function saveBudget(budget) {
   );
   storageService.setCollection(USER_ID, 'budgets', [nextBudget, ...nextBudgets]);
   return { valid: true, data: nextBudget };
+}
+
+async function saveBudgetAsync(budget) {
+  const validation = validateBudget(budget);
+  if (!validation.valid) {
+    return validation;
+  }
+  try {
+    const saved = await apiService.request({
+      url: '/budgets',
+      method: 'PUT',
+      data: validation.data
+    });
+    return saveBudget(saved || validation.data);
+  } catch (error) {
+    return { valid: false, message: error.message || '预算保存失败' };
+  }
+}
+
+async function loadBudgetsFromCloud() {
+  const localBudgets = storageService.getCollection(USER_ID, 'budgets');
+  const cloudBudgets = await apiService.request({ url: '/budgets' });
+
+  // 首次启用云端预算时，将当前设备已有预算归入当前微信用户。
+  if ((!cloudBudgets || cloudBudgets.length === 0) && localBudgets.length > 0) {
+    const migrated = [];
+    for (const budget of localBudgets) {
+      const validation = validateBudget(budget);
+      if (validation.valid) {
+        const saved = await apiService.request({
+          url: '/budgets',
+          method: 'PUT',
+          data: validation.data
+        });
+        migrated.push(normalizeBudget(saved || validation.data));
+      }
+    }
+    storageService.setCollection(USER_ID, 'budgets', migrated);
+    return migrated;
+  }
+
+  const normalized = (cloudBudgets || []).map(normalizeBudget);
+  storageService.setCollection(USER_ID, 'budgets', normalized);
+  return normalized;
 }
 
 function isExpenseInPeriod(expense, budgetType, period) {
@@ -463,7 +508,10 @@ function getBudgetDashboard(budgetType = 'month', period = getDefaultPeriod(budg
 }
 
 async function getBudgetDashboardAsync(budgetType = 'month', period = getDefaultPeriod(budgetType)) {
-  await expenseService.listExpensesAsync();
+  await Promise.all([
+    expenseService.listExpensesAsync(),
+    loadBudgetsFromCloud()
+  ]);
   return getBudgetDashboard(budgetType, period);
 }
 
@@ -475,6 +523,8 @@ module.exports = {
   getDefaultPeriod,
   getBudget,
   saveBudget,
+  saveBudgetAsync,
+  loadBudgetsFromCloud,
   validateBudget,
   getPeriodExpenses,
   getBudgetProgress,
