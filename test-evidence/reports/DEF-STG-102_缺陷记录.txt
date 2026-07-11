@@ -1,0 +1,27 @@
+﻿缺陷编号：DEF-STG-102
+缺陷标题：清除消费关联后舞台列表仍保留旧 expenseId
+
+所属模块：舞台模块 / 消费记录联动
+严重程度：中
+状态：待开发修复
+
+复现步骤：
+1. 将消费记录 E001 关联到舞台 S002。
+2. 调用 clearStageExpenseLink('S002', 'E001')。
+3. 再次通过 listStages() 查询舞台 S002。
+
+预期结果：
+舞台 S002 的 expenseId 应被清空。
+
+实际结果：
+舞台 S002 的 expenseId 仍为 E001。
+
+根因分析：
+clearStageExpenseLink 只更新了本地存储中的舞台关联，
+未同步更新内存状态 userStateByStageId，
+导致 listStages 继续返回旧 expenseId。
+
+自动化状态：
+已通过 test.failing 稳定复现。
+开发修复后，该测试会出现“failing test unexpectedly passed”，
+届时应将 test.failing 改回普通 test。

@@ -1,0 +1,22 @@
+﻿第二轮模块冻结回归结论
+
+测试基线：origin/main e8094b4
+测试分支：test/module-freeze-regression-20260711
+
+执行结果：
+1. Test Suites：13 passed / 13 total
+2. Tests：127 passed / 127 total
+3. Snapshots：0
+4. 已完成覆盖率测试并保存证据
+5. 本轮仅调整自动化测试及测试证据，未修改业务源码
+
+完成适配的测试套件：
+- apiService
+- budgetService
+- expenseService
+- expensesRoute
+- stageService
+
+结论：
+最新版模块能够通过当前自动化回归基线。
+其中 DEF-STG-102 使用 test.failing 稳定复现，因此全套测试显示通过不代表该缺陷已修复。
