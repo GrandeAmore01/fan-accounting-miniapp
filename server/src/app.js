@@ -11,6 +11,7 @@ const userStageRoutes = require('./routes/userStages');
 const stageNoteRoutes = require('./routes/stageNotes');
 const authRoutes = require('./routes/auth');
 const budgetRoutes = require('./routes/budgets');
+const profileRoutes = require('./routes/profile');
 const { requireAuth } = require('./utils/auth');
 
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api', requireAuth);
 
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/budgets', budgetRoutes);
+app.use('/api/profile', profileRoutes);
 app.use('/api/stages', stageRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/user-collections', userCollectionRoutes);

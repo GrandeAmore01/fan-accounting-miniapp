@@ -3,15 +3,22 @@
   <text class="page-subtitle">记录每一次喜欢，也照顾好自己的预算。</text>
 
   <view class="profile-hero">
-    <view class="avatar-placeholder">微</view>
+    <button class="avatar-button" open-type="chooseAvatar" bindchooseavatar="handleChooseAvatar" disabled="{{savingProfile}}">
+      <image wx:if="{{profile.avatarUrl}}" class="avatar-image" src="{{profile.avatarUrl}}" mode="aspectFill"></image>
+      <view wx:else class="avatar-placeholder">微</view>
+      <view class="avatar-edit-badge">编辑</view>
+    </button>
     <view class="profile-main">
-      <text class="profile-name">{{profile.nickname || '微信用户'}}</text>
+      <view class="profile-name-row" bindtap="handleEditNickname">
+        <text class="profile-name">{{profile.nickname || '微信用户'}}</text>
+        <text class="profile-edit">编辑</text>
+      </view>
       <view class="profile-sync-line">
         <view class="sync-dot {{sync.state}}"></view>
         <text>{{sync.label}}</text>
         <text wx:if="{{sync.lastTime}}" class="sync-time">{{sync.lastTime}}</text>
       </view>
-      <text class="profile-slogan">数据按当前微信账号安全同步</text>
+      <text class="profile-slogan">头像和昵称由你设置，不会修改微信资料</text>
     </view>
   </view>
 

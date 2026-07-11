@@ -10,6 +10,8 @@ const DEFAULT_USER_DATA = {
   stageNotes: [],
   profile: {
     nickname: '本地用户',
+    displayName: '微信用户',
+    avatarFileId: '',
     loginStatus: false
   }
 };
