@@ -1,5 +1,13 @@
 ﻿const mockExpenseService = {
-  listExpenses: jest.fn()
+  expenseCategories: [
+    { id: 'meet', name: '见面' },
+    { id: 'collection', name: '藏品' },
+    { id: 'accommodation', name: '住宿' },
+    { id: 'transport', name: '交通' },
+    { id: 'other', name: '其他' }
+  ],
+  listExpenses: jest.fn(),
+  listExpensesAsync: jest.fn()
 };
 
 const mockStorageService = {
@@ -210,7 +218,7 @@ describe('M4 - budgetService 输入校验与保存', () => {
     });
   });
 
-  test.failing('已知缺陷 DEF-BUD-102：消费分类 ID 不一致导致部分分类预算未计入总额校验', () => {
+  test('已知缺陷 DEF-BUD-102：消费分类 ID 不一致导致部分分类预算未计入总额校验', () => {
     expect(
       budgetService.validateBudget(
         currentBudget({
@@ -647,5 +655,6 @@ describe('M4 - budgetService 对比、趋势和仪表盘', () => {
     );
   });
 });
+
 
 

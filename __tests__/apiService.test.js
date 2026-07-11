@@ -25,10 +25,12 @@ describe('M2 - apiService.buildQuery', () => {
   });
 });
 
-describe('M2 - apiService.request', () => {
+describe('M2 - apiService.request 云托管请求', () => {
   beforeEach(() => {
     global.wx = {
-      request: jest.fn()
+      cloud: {
+        callContainer: jest.fn()
+      }
     };
   });
 
@@ -37,12 +39,14 @@ describe('M2 - apiService.request', () => {
   });
 
   test('2xx 且 ok 不为 false 时返回 data', async () => {
-    global.wx.request.mockImplementation((options) => {
+    global.wx.cloud.callContainer.mockImplementation((options) => {
       options.success({
         statusCode: 200,
         data: {
           ok: true,
-          data: { collectionId: 'C001' }
+          data: {
+            collectionId: 'C001'
+          }
         }
       });
     });
@@ -54,20 +58,17 @@ describe('M2 - apiService.request', () => {
       collectionId: 'C001'
     });
 
-    expect(global.wx.request).toHaveBeenCalledWith(
+    expect(global.wx.cloud.callContainer).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'http://127.0.0.1:3000/collections/C001',
+        path: 'http://127.0.0.1:3000/collections/C001',
         method: 'GET',
-        data: {},
-        header: expect.objectContaining({
-          'content-type': 'application/json'
-        })
+        data: {}
       })
     );
   });
 
   test('业务响应 ok=false 时抛出服务端错误信息', async () => {
-    global.wx.request.mockImplementation((options) => {
+    global.wx.cloud.callContainer.mockImplementation((options) => {
       options.success({
         statusCode: 200,
         data: {
@@ -84,7 +85,7 @@ describe('M2 - apiService.request', () => {
   });
 
   test('非 2xx 状态码时抛出请求失败错误', async () => {
-    global.wx.request.mockImplementation((options) => {
+    global.wx.cloud.callContainer.mockImplementation((options) => {
       options.success({
         statusCode: 500,
         data: {}
@@ -97,16 +98,16 @@ describe('M2 - apiService.request', () => {
     })).rejects.toThrow('请求失败：500');
   });
 
-  test('微信网络请求失败时返回 errMsg', async () => {
-    global.wx.request.mockImplementation((options) => {
+  test('云托管网络请求失败时返回 errMsg', async () => {
+    global.wx.cloud.callContainer.mockImplementation((options) => {
       options.fail({
-        errMsg: 'request:fail timeout'
+        errMsg: 'callContainer:fail timeout'
       });
     });
 
     await expect(apiService.request({
       baseUrl: 'http://127.0.0.1:3000',
       url: '/collections'
-    })).rejects.toThrow('request:fail timeout');
+    })).rejects.toThrow('callContainer:fail timeout');
   });
 });

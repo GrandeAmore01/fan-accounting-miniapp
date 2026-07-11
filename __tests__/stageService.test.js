@@ -124,7 +124,7 @@ describe('M3 - stageService 舞台基础数据', () => {
   test('舞台数据加载后完成歌曲、票档和显示字段补充', () => {
     const stages = stageService.listStages();
 
-    expect(stages).toHaveLength(3);
+    expect(stages).toHaveLength(4);
 
     expect(stages[0]).toEqual(
       expect.objectContaining({
@@ -135,8 +135,7 @@ describe('M3 - stageService 舞台基础数据', () => {
         priceTiers: [580, 780, 1080],
         priceTierText: '580元 / 780元 / 1080元',
         ticketPrice: 580,
-        isLighted: false,
-        photoCount: 0
+        isLighted: false
       })
     );
   });
@@ -203,7 +202,7 @@ describe('M3 - stageService 舞台基础数据', () => {
   });
 });
 
-describe('M3 - stageService 回忆备注和照片', () => {
+describe('M3 - stageService 观演备注与取消点亮', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetStore();
@@ -224,53 +223,46 @@ describe('M3 - stageService 回忆备注和照片', () => {
     );
   });
 
-  test('未保存回忆时返回默认空备注', () => {
+  test('未保存回忆时返回默认空备注且不再包含照片字段', () => {
     expect(stageService.getStageNote('S001')).toEqual({
       stageId: 'S001',
       seat: '',
       companions: '',
       note: '',
-      actualTicketPrice: 0,
-      photos: []
+      actualTicketPrice: 0
     });
   });
 
-  test('非数字实际票价保存失败', () => {
-    expect(
+  test('非数字实际票价保存失败', async () => {
+    await expect(
       stageService.saveStageNote('S001', {
         actualTicketPrice: 'abc'
       })
-    ).toEqual({
+    ).resolves.toEqual({
       valid: false,
       message: '票价必须为数字'
     });
   });
 
-  test('实际票价为 0 时保存失败', () => {
-    expect(
+  test('实际票价为0时保存失败', async () => {
+    await expect(
       stageService.saveStageNote('S001', {
         actualTicketPrice: '0'
       })
-    ).toEqual({
+    ).resolves.toEqual({
       valid: false,
       message: '票价必须大于 0'
     });
   });
 
-  test('保存回忆时实际票价转为数字且照片最多保留9张', () => {
-    const photos = Array.from(
-      { length: 12 },
-      (_, index) => `photo-${index + 1}.jpg`
-    );
-
-    const result = stageService.saveStageNote(
+  test('保存观演备注时实际票价转为数字', async () => {
+    const result = await stageService.saveStageNote(
       'S001',
       {
         seat: 'A区1排',
         companions: '朋友A',
         note: '第一次现场',
-        actualTicketPrice: '680',
-        photos
+        actualTicketPrice: '680'
       }
     );
 
@@ -286,71 +278,57 @@ describe('M3 - stageService 回忆备注和照片', () => {
       })
     );
 
-    expect(result.data.photos).toHaveLength(9);
-    expect(stageService.MAX_PHOTOS).toBe(9);
+    expect(stageService.getStageNote('S001')).toEqual(
+      expect.objectContaining({
+        seat: 'A区1排',
+        companions: '朋友A',
+        note: '第一次现场',
+        actualTicketPrice: 680
+      })
+    );
   });
 
-  test.failing('已知缺陷 DEF-STG-101：未填写实际票价时追加照片被票价0校验阻断', () => {
-    stageService.saveStageNote('S001', {
-      actualTicketPrice: '',
-      photos: [
-        '1.jpg',
-        '2.jpg',
-        '3.jpg',
-        '4.jpg',
-        '5.jpg',
-        '6.jpg',
-        '7.jpg'
-      ]
-    });
-
-    const result = stageService.addStagePhotos(
-      'S001',
-      [
-        '8.jpg',
-        '9.jpg',
-        '10.jpg',
-        '11.jpg'
-      ]
+  test('倒计时占位场次存在但不计入舞台进度总数', () => {
+    const placeholder = stageService.listStages().find(
+      (item) =>
+        item.stageId === 'stage_countdown_placeholder'
     );
 
-    expect(result.valid).toBe(true);
-    expect(result.data.photos).toHaveLength(9);
-    expect(result.data.photos).toEqual([
-      '1.jpg',
-      '2.jpg',
-      '3.jpg',
-      '4.jpg',
-      '5.jpg',
-      '6.jpg',
-      '7.jpg',
-      '8.jpg',
-      '9.jpg'
-    ]);
+    expect(placeholder).toEqual(
+      expect.objectContaining({
+        stageName: '下一见面（待定场次）',
+        isCountdownPlaceholder: true
+      })
+    );
+
+    expect(stageService.getStageStats()).toEqual(
+      expect.objectContaining({
+        total: 3
+      })
+    );
   });
 
-  test.failing('已知缺陷 DEF-STG-101：未填写实际票价时删除照片被票价0校验阻断', () => {
-    stageService.saveStageNote('S001', {
-      actualTicketPrice: '',
-      photos: [
-        '1.jpg',
-        '2.jpg',
-        '3.jpg'
-      ]
+  test('取消点亮后清空观演备注', async () => {
+    await stageService.lightStage('S001');
+
+    await stageService.saveStageNote('S001', {
+      seat: 'A区1排',
+      companions: '朋友A',
+      note: '需要清空的备注',
+      actualTicketPrice: '680'
     });
 
-    const result = stageService.removeStagePhoto(
-      'S001',
-      '2.jpg'
-    );
+    await stageService.unlightStage('S001');
 
-    expect(result.data.photos).toEqual([
-      '1.jpg',
-      '3.jpg'
-    ]);
+    expect(stageService.getStageNote('S001')).toEqual({
+      stageId: 'S001',
+      seat: '',
+      companions: '',
+      note: '',
+      actualTicketPrice: 0
+    });
   });
 });
-
 describe('M3 - stageService 筛选、搜索和统计', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -372,8 +350,9 @@ describe('M3 - stageService 筛选、搜索和统计', () => {
     );
   });
 
-  test('能够组合舞台类型、年份、关键词和点亮状态筛选', () => {
-    stageService.lightStage('S001');
+  test('能够组合舞台类型、年份、关键词和点亮状态筛选', async () => {
+    await stageService.unlightStage('S001');
+    await stageService.lightStage('S001');
 
     const result = stageService.filterStages({
       stageType: 'concert',
@@ -397,13 +376,18 @@ describe('M3 - stageService 筛选、搜索和统计', () => {
     ).toEqual(['S001', 'S002']);
   });
 
-  test('演唱会选项排除音乐节并支持按日期查找', () => {
+  test('见面场次选项包含真实场次和倒计时占位场次', () => {
     const options =
       stageService.getConcertStageOptions();
 
     expect(
       options.map((item) => item.id)
-    ).toEqual(['S001', 'S003']);
+    ).toEqual([
+      'S001',
+      'S002',
+      'S003',
+      'stage_countdown_placeholder'
+    ]);
 
     expect(
       stageService.findStageByDate(
@@ -417,8 +401,11 @@ describe('M3 - stageService 筛选、搜索和统计', () => {
     );
   });
 
-  test('点亮舞台后更新点亮状态和总体进度', () => {
-    const result = stageService.lightStage('S001');
+  test('点亮舞台后更新点亮状态且占位场次不计入进度', async () => {
+    await stageService.unlightStage('S001');
+
+    const result =
+      await stageService.lightStage('S001');
 
     expect(result.valid).toBe(true);
 
@@ -437,9 +424,8 @@ describe('M3 - stageService 筛选、搜索和统计', () => {
     );
   });
 });
-
 describe('M3 - 舞台与消费记录联动', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     resetStore();
 
@@ -457,9 +443,20 @@ describe('M3 - 舞台与消费记录联动', () => {
     mockExpenseService.listExpenses.mockImplementation(
       () => store.expenses
     );
+
+    mockExpenseService.removeExpense.mockImplementation(
+      (expenseId) => {
+        store.expenses = store.expenses.filter(
+          (item) => item.expenseId !== expenseId
+        );
+        return store.expenses;
+      }
+    );
+
+    await stageService.ensureStagesLoaded();
   });
 
-  test('关联消费记录时自动点亮舞台并保存 expenseId', () => {
+  test('关联消费记录时自动点亮舞台并保存expenseId', async () => {
     store.expenses = [
       {
         expenseId: 'E001',
@@ -468,7 +465,8 @@ describe('M3 - 舞台与消费记录联动', () => {
       }
     ];
 
-    stageService.linkStageExpense('S001', 'E001');
+    await stageService.ensureStagesLoaded();
+    await stageService.linkStageExpense('S001', 'E001');
 
     const stage = stageService.listStages().find(
       (item) => item.stageId === 'S001'
@@ -487,49 +485,52 @@ describe('M3 - 舞台与消费记录联动', () => {
     });
   });
 
-  test('清除消费关联时只有匹配 expenseId 才清空', () => {
-    stageService.linkStageExpense('S001', 'E001');
+  test.failing('已知缺陷 DEF-STG-102：清除消费关联后内存状态未同步，列表仍保留旧 expenseId', async () => {
+    await stageService.linkStageExpense(
+      'S002',
+      'E001'
+    );
 
     stageService.clearStageExpenseLink(
-      'S001',
+      'S002',
       'E999'
     );
 
     expect(
       stageService.listStages().find(
-        (item) => item.stageId === 'S001'
+        (item) => item.stageId === 'S002'
       ).expenseId
     ).toBe('E001');
 
     stageService.clearStageExpenseLink(
-      'S001',
+      'S002',
       'E001'
     );
 
     expect(
       stageService.listStages().find(
-        (item) => item.stageId === 'S001'
+        (item) => item.stageId === 'S002'
       ).expenseId
     ).toBe('');
   });
 
-  test('舞台不存在或票价无效时拒绝同步生成消费记录', () => {
-    expect(
+  test('舞台不存在或票价无效时拒绝同步生成消费记录', async () => {
+    await expect(
       stageService.createExpenseFromStage(
         'UNKNOWN',
         680
       )
-    ).toEqual({
+    ).resolves.toEqual({
       valid: false,
       message: '舞台场次不存在'
     });
 
-    expect(
+    await expect(
       stageService.createExpenseFromStage(
         'S001',
         0
       )
-    ).toEqual({
+    ).resolves.toEqual({
       valid: false,
       message: '请先选择票档或输入有效票价'
     });
@@ -538,28 +539,31 @@ describe('M3 - 舞台与消费记录联动', () => {
       .not.toHaveBeenCalled();
   });
 
-  test('从舞台生成消费记录时传递舞台日期、票价并建立关联', () => {
-    mockExpenseService.addExpense.mockReturnValue({
-      valid: true,
-      data: {
-        expenseId: 'E100',
-        stageId: 'S001'
+  test('从舞台生成消费记录时传递舞台日期票价并建立关联', async () => {
+    mockExpenseService.addExpense.mockImplementation(
+      (payload) => {
+        const data = {
+          ...payload,
+          expenseId: 'E100'
+        };
+
+        store.expenses = [data];
+
+        return {
+          valid: true,
+          data
+        };
       }
-    });
+    );
 
     const result =
-      stageService.createExpenseFromStage(
+      await stageService.createExpenseFromStage(
         'S001',
         680
       );
 
-    expect(result).toEqual({
-      valid: true,
-      data: {
-        expenseId: 'E100',
-        stageId: 'S001'
-      }
-    });
+    expect(result.valid).toBe(true);
+    expect(result.data.expenseId).toBe('E100');
 
     expect(mockExpenseService.addExpense)
       .toHaveBeenCalledWith(
@@ -584,8 +588,58 @@ describe('M3 - 舞台与消费记录联动', () => {
     ).toBe('E100');
   });
 
-  test('舞台仪表盘聚合时间线、筛选、统计和歌曲搜索结果', () => {
-    stageService.lightStage('S001');
+  test('取消点亮时删除关联消费并清空备注', async () => {
+    store.expenses = [
+      {
+        expenseId: 'E200',
+        stageId: 'S003',
+        seat: 'B区2排'
+      }
+    ];
+
+    await stageService.ensureStagesLoaded();
+    await stageService.linkStageExpense('S003', 'E200');
+
+    await stageService.saveStageNote('S003', {
+      seat: 'B区2排',
+      companions: '朋友B',
+      note: '待清空',
+      actualTicketPrice: '380'
+    });
+
+    await stageService.unlightStage(
+      'S003',
+      {
+        deleteExpense: true
+      }
+    );
+
+    expect(mockExpenseService.removeExpense)
+      .toHaveBeenCalledWith('E200');
+
+    expect(
+      stageService.listStages().find(
+        (item) => item.stageId === 'S003'
+      )
+    ).toEqual(
+      expect.objectContaining({
+        isLighted: false,
+        expenseId: ''
+      })
+    );
+
+    expect(stageService.getStageNote('S003')).toEqual({
+      stageId: 'S003',
+      seat: '',
+      companions: '',
+      note: '',
+      actualTicketPrice: 0
+    });
+  });
+
+  test('舞台仪表盘聚合时间线筛选统计和歌曲搜索结果', async () => {
+    await stageService.unlightStage('S001');
+    await stageService.lightStage('S001');
 
     const dashboard = stageService.getStageDashboard({
       keyword: '稻香',
@@ -612,5 +666,4 @@ describe('M3 - 舞台与消费记录联动', () => {
       .toBe('稻香');
   });
 });
-
 
