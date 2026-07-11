@@ -1,9 +1,10 @@
 module.exports = {
+  CLOUD_ENV_ID: 'cloud1-d4go8uchda9469a4e',
   useBackend: true,
   useStageBackend: true,
-  apiBaseUrl: 'http://127.0.0.1:3000/api',
-  collectionApiBaseUrl: 'https://fan-accounting-api-279639-5-1451816515.sh.run.tcloudbase.com/api',
-  expenseApiBaseUrl: 'https://fan-accounting-api-279639-5-1451816515.sh.run.tcloudbase.com/api',
-  stageApiBaseUrl: 'https://fan-accounting-api-279639-5-1451816515.sh.run.tcloudbase.com/api',
+  apiBaseUrl: '/api',
+  collectionApiBaseUrl: '/api',
+  expenseApiBaseUrl: '/api',
+  stageApiBaseUrl: '/api',
   userId: 'local-user'
 };
