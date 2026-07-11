@@ -1,30 +1,17 @@
 const expenseService = require('./expenseService');
 const storageService = require('./storageService');
 const config = require('./config');
-const { expenseTypes } = require('../data/expenseTypes');
 
 const USER_ID = config.userId || 'local-user';
 const DEFAULT_THRESHOLD = 0.8;
 
 function getBudgetTargets() {
-  const meetType = expenseTypes.find((item) => item.id === 'meet');
-  const meetTargets = meetType
-    ? meetType.subTypes.map((item) => ({
-        id: `meet_${item.id}`,
-        name: item.name,
-        category: 'meet',
-        subType: item.id
-      }))
-    : [];
-  const mainTargets = expenseTypes
-    .filter((item) => item.id !== 'meet')
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      category: item.id,
-      subType: ''
-    }));
-  return [...meetTargets, ...mainTargets];
+  return expenseService.expenseCategories.map((item) => ({
+    id: item.id,
+    name: item.name,
+    category: item.id,
+    subType: ''
+  }));
 }
 
 function getCurrentMonth() {
@@ -76,7 +63,12 @@ function normalizeBudget(budget) {
 
 function normalizeCategoryBudgets(categoryBudgets = {}) {
   return getBudgetTargets().reduce((result, target) => {
-    const amount = Number(categoryBudgets[target.id] || 0);
+    let amount = Number(categoryBudgets[target.id] || 0);
+    if (target.id === 'meet') {
+      amount += Object.keys(categoryBudgets)
+        .filter((key) => key.indexOf('meet_') === 0)
+        .reduce((sum, key) => sum + Number(categoryBudgets[key] || 0), 0);
+    }
     result[target.id] = amount > 0 ? amount : 0;
     return result;
   }, {});
@@ -211,7 +203,7 @@ function getCategoryBudgetStats(budgetType = 'month', period = getDefaultPeriod(
   const expenseMap = {};
 
   periodExpenses.forEach((item) => {
-    const targetId = item.category === 'meet' ? `meet_${item.subType}` : item.category;
+    const targetId = item.category;
     expenseMap[targetId] = expenseMap[targetId] || {
       amount: 0,
       count: 0
@@ -476,7 +468,7 @@ async function getBudgetDashboardAsync(budgetType = 'month', period = getDefault
 }
 
 module.exports = {
-  expenseCategories: expenseTypes,
+  expenseCategories: expenseService.expenseCategories,
   getBudgetTargets,
   getCurrentMonth,
   getCurrentYear,
