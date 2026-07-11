@@ -1,45 +1,97 @@
-<view class="page">
+<view class="page profile-page">
   <text class="page-title">我的</text>
-  <text class="page-subtitle">账号、云端同步与本地缓存管理。</text>
+  <text class="page-subtitle">记录每一次喜欢，也照顾好自己的预算。</text>
 
-  <view class="card profile-card">
+  <view class="profile-hero">
     <view class="avatar-placeholder">微</view>
     <view class="profile-main">
-      <text class="card-title">{{profile.nickname}}</text>
-      <text class="muted">登录状态：{{cloudStatus.loginReady ? '微信身份已连接' : '正在连接微信身份'}}</text>
-      <text class="tag">数据按微信用户安全隔离</text>
+      <text class="profile-name">{{profile.nickname || '微信用户'}}</text>
+      <view class="profile-sync-line">
+        <view class="sync-dot {{sync.state}}"></view>
+        <text>{{sync.label}}</text>
+        <text wx:if="{{sync.lastTime}}" class="sync-time">{{sync.lastTime}}</text>
+      </view>
+      <text class="profile-slogan">数据按当前微信账号安全同步</text>
     </view>
   </view>
 
-  <view class="card">
-    <view class="row">
-      <text class="card-title">云端同步</text>
-      <text class="{{cloudStatus.loginReady ? 'status-on' : 'status-off'}}">
-        {{cloudStatus.loginReady ? '已连接' : '连接中'}}
-      </text>
+  <view class="card overview-card">
+    <view class="section-header">
+      <text class="card-title">我的数据</text>
+      <text class="section-hint">点击查看详情</text>
     </view>
-    <text class="muted">{{cloudStatus.message}}</text>
-    <button class="secondary-button" bindtap="handleCloudStatusTap">查看同步状态</button>
+    <view class="overview-grid">
+      <view class="overview-item" bindtap="handleNavigate" data-url="/pages/expenses/index">
+        <text class="overview-value">{{overview.expenseCount}}</text>
+        <text class="overview-label">消费记录</text>
+      </view>
+      <view class="overview-item" bindtap="handleNavigate" data-url="/pages/expenses/index">
+        <text class="overview-value money-value">¥{{overview.totalAmountText}}</text>
+        <text class="overview-label">累计支出</text>
+      </view>
+      <view class="overview-item" bindtap="handleNavigate" data-url="/pages/collections/index">
+        <text class="overview-value">{{overview.collectionCount}}</text>
+        <text class="overview-label">点亮藏品</text>
+      </view>
+      <view class="overview-item" bindtap="handleNavigate" data-url="/pages/stages/index">
+        <text class="overview-value">{{overview.stageCount}}</text>
+        <text class="overview-label">点亮舞台</text>
+      </view>
+    </view>
   </view>
 
-  <view class="card">
-    <view class="row">
-      <text class="card-title">本机缓存概览</text>
-      <text class="{{hasLocalData ? 'status-on' : 'status-off'}}">{{hasLocalData ? '已有缓存' : '暂无缓存'}}</text>
+  <view class="card budget-card" bindtap="handleNavigate" data-url="/pages/budget/index">
+    <view class="section-header">
+      <text class="card-title">本月预算</text>
+      <text class="chevron">›</text>
     </view>
-    <view class="data-grid">
-      <view class="data-cell"><text class="metric">{{counts.expenses}}</text><text class="muted">消费缓存</text></view>
-      <view class="data-cell"><text class="metric">{{counts.budgets}}</text><text class="muted">预算缓存</text></view>
-      <view class="data-cell"><text class="metric">{{counts.lightedCollections}}/{{counts.userCollections}}</text><text class="muted">藏品缓存</text></view>
-      <view class="data-cell"><text class="metric">{{counts.lightedStages}}/{{counts.userStages}}</text><text class="muted">舞台缓存</text></view>
+    <block wx:if="{{budget.hasBudget}}">
+      <view class="budget-amount-row">
+        <view>
+          <text class="budget-caption">剩余预算</text>
+          <text class="budget-remaining">¥{{budget.remainingAmountText}}</text>
+        </view>
+        <text class="budget-ratio">¥{{budget.usedAmountText}} / ¥{{budget.amountText}}</text>
+      </view>
+      <view class="progress-track">
+        <view class="progress-fill {{budget.percent > 100 ? 'over' : ''}}" style="width: {{budget.progressWidth}}%;"></view>
+      </view>
+      <text class="budget-status">{{budget.statusText}}</text>
+    </block>
+    <view wx:else class="budget-empty">
+      <text>还没有设置本月预算</text>
+      <text class="budget-empty-action">去设置 ›</text>
     </view>
-    <button class="secondary-button danger-button" bindtap="handleClearLocalData">清理本机缓存</button>
   </view>
 
-  <view class="card">
-    <text class="card-title">隐私与同步</text>
-    <text class="muted">消费、预算、藏品点亮和舞台记录以云端数据为准，可在不同设备间同步。</text>
-    <text class="muted">本地只保留最近一次成功数据、临时草稿和页面状态，用于加速显示。</text>
-    <text class="muted">清理本地缓存不会删除云端数据。</text>
+  <view class="card settings-card">
+    <view class="setting-row" bindtap="handleSyncTap">
+      <view class="setting-main">
+        <text class="setting-title">云端同步</text>
+        <text class="setting-desc">{{sync.message}}</text>
+      </view>
+      <view class="setting-state {{sync.state}}">{{sync.label}}</view>
+    </view>
+    <view class="setting-divider"></view>
+    <view class="setting-row" bindtap="handlePrivacyTap">
+      <view class="setting-main">
+        <text class="setting-title">数据与隐私</text>
+        <text class="setting-desc">了解数据保存与使用方式</text>
+      </view>
+      <text class="chevron">›</text>
+    </view>
+    <view class="setting-divider"></view>
+    <view class="setting-row" bindtap="handleClearLocalData">
+      <view class="setting-main">
+        <text class="setting-title">清理本机缓存</text>
+        <text class="setting-desc">不会删除云端数据</text>
+      </view>
+      <text class="chevron">›</text>
+    </view>
+  </view>
+
+  <view class="privacy-note">
+    <text class="privacy-title">隐私优先</text>
+    <text>你的个人记录不会公开展示，也不会用于粉丝消费排名。</text>
   </view>
 </view>
