@@ -18,7 +18,7 @@
         <text>{{sync.label}}</text>
         <text wx:if="{{sync.lastTime}}" class="sync-time">{{sync.lastTime}}</text>
       </view>
-      <text class="profile-slogan">头像和昵称由你设置，不会修改微信资料</text>
+      <text class="profile-slogan">设置你的专属头像和昵称</text>
     </view>
   </view>
 
