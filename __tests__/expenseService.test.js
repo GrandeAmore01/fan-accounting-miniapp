@@ -4,10 +4,11 @@
 };
 
 const mockStageService = {
-  lightStage: jest.fn(),
-  linkStageExpense: jest.fn(),
-  clearStageExpenseLink: jest.fn(),
-  ensureStagesLoaded: jest.fn(),
+  lightStage: jest.fn().mockResolvedValue(),
+  linkStageExpense: jest.fn().mockResolvedValue(),
+  clearStageExpenseLink: jest.fn().mockResolvedValue(),
+  unlightStage: jest.fn().mockResolvedValue(),
+  ensureStagesLoaded: jest.fn().mockResolvedValue(),
   listStages: jest.fn()
 };
 
@@ -297,221 +298,308 @@ describe('M1 - expenseService 输入校验', () => {
   });
 });
 
-describe('M1 - expenseService 本地增删改查', () => {
+describe('M1 - expenseService 云端增删改查与统计', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockStorageService.getCollection.mockReturnValue([]);
+
+    mockApiService.buildQuery.mockReturnValue(
+      '?userId=test-user'
+    );
   });
 
-  test('读取消费记录时补充分组名称和金额字段', () => {
-    mockStorageService.getCollection.mockReturnValue([
-      validExpense({
+  test('从云端读取消费记录并补充分组名称和金额字段', async () => {
+    mockApiService.request.mockResolvedValue([
+      {
+        expenseId: 'E100',
         category: 'collection',
         subType: 'goods',
         itemName: '测试徽章',
-        amount: 30,
+        amount: 50,
         quantity: 2,
         pricingMode: 'unit',
-        stageDate: ''
-      })
+        date: '2026-07-10',
+        includeInTotal: true,
+        collectionId: 'C001'
+      }
     ]);
 
-    const result = expenseService.listExpenses();
+    const result =
+      await expenseService.listExpensesAsync();
+
+    expect(mockApiService.request)
+      .toHaveBeenCalledWith({
+        baseUrl: 'http://expense.test',
+        url: '/expenses?userId=test-user'
+      });
 
     expect(result).toHaveLength(1);
+
     expect(result[0]).toEqual(
       expect.objectContaining({
+        expenseId: 'E100',
         categoryName: '藏品 / 周边',
-        baseAmount: 60,
-        totalAmount: 60,
-        includedAmount: 60,
-        images: [],
-        outfieldOnly: false
+        totalAmount: 100,
+        includedAmount: 100
       })
     );
   });
 
-  test('新增见面消费时保存到首位并同步点亮舞台', () => {
-    mockStorageService.getCollection.mockReturnValue([
-      {
-        expenseId: 'OLD001'
-      }
-    ]);
+  test('云端新增见面消费并同步点亮舞台', async () => {
+    mockApiService.request.mockResolvedValue({
+      expenseId: 'E200',
+      category: 'meet',
+      subType: 'concert',
+      itemName: '上海演唱会',
+      amount: 680,
+      quantity: 1,
+      pricingMode: 'direct',
+      date: '2026-07-10',
+      stageDate: '2026-07-10',
+      stageId: 'STAGE001',
+      includeInTotal: true
+    });
 
-    const result = expenseService.addExpense(
-      validExpense()
-    );
+    const result =
+      await expenseService.addExpenseAsync(
+        validExpense()
+      );
 
     expect(result.valid).toBe(true);
 
-    expect(mockStorageService.setCollection)
+    expect(mockApiService.request)
       .toHaveBeenCalledWith(
-        'test-user',
-        'expenses',
-        [
-          expect.objectContaining({
-            expenseId: 'E001'
-          }),
-          {
-            expenseId: 'OLD001'
-          }
-        ]
+        expect.objectContaining({
+          baseUrl: 'http://expense.test',
+          url: '/expenses',
+          method: 'POST',
+          data: expect.objectContaining({
+            userId: 'test-user',
+            stageId: 'STAGE001'
+          })
+        })
       );
 
     expect(mockStageService.lightStage)
       .toHaveBeenCalledWith('STAGE001');
 
     expect(mockStageService.linkStageExpense)
-      .toHaveBeenCalledWith('STAGE001', 'E001');
+      .toHaveBeenCalledWith(
+        'STAGE001',
+        'E200'
+      );
   });
 
-  test('修改消费时只替换指定记录', () => {
-    mockStorageService.getCollection.mockReturnValue([
-      {
-        expenseId: 'E001',
-        itemName: '旧名称'
-      },
-      {
-        expenseId: 'E002',
-        itemName: '保留记录'
-      }
-    ]);
+  test('云端修改消费时调用 PUT 并返回更新记录', async () => {
+    mockApiService.request.mockResolvedValue({
+      expenseId: 'E001',
+      category: 'meet',
+      subType: 'concert',
+      itemName: '修改后的演唱会门票',
+      amount: 880,
+      quantity: 1,
+      pricingMode: 'direct',
+      date: '2026-07-10',
+      stageDate: '2026-07-10',
+      stageId: 'STAGE001',
+      includeInTotal: true
+    });
 
-    const result = expenseService.updateExpense(
-      'E001',
-      validExpense({
-        itemName: '新名称'
-      })
-    );
+    const result =
+      await expenseService.updateExpenseAsync(
+        'E001',
+        validExpense({
+          itemName: '修改后的演唱会门票',
+          amount: '880'
+        })
+      );
 
     expect(result.valid).toBe(true);
 
-    const saved =
-      mockStorageService.setCollection.mock.calls[0][2];
-
-    expect(saved).toHaveLength(2);
-    expect(saved[0].itemName).toBe('新名称');
-    expect(saved[1]).toEqual({
-      expenseId: 'E002',
-      itemName: '保留记录'
-    });
-  });
-
-  test('删除消费时删除指定记录并清除舞台关联', () => {
-    mockStorageService.getCollection.mockReturnValue([
-      {
-        expenseId: 'E001',
-        stageId: 'STAGE001'
-      },
-      {
-        expenseId: 'E002',
-        stageId: ''
-      }
-    ]);
-
-    const result =
-      expenseService.removeExpense('E001');
-
-    expect(result).toEqual([
-      {
-        expenseId: 'E002',
-        stageId: ''
-      }
-    ]);
-
-    expect(mockStorageService.setCollection)
+    expect(mockApiService.request)
       .toHaveBeenCalledWith(
-        'test-user',
-        'expenses',
-        result
+        expect.objectContaining({
+          baseUrl: 'http://expense.test',
+          url: '/expenses/E001',
+          method: 'PUT',
+          data: expect.objectContaining({
+            expenseId: 'E001',
+            itemName: '修改后的演唱会门票',
+            userId: 'test-user'
+          })
+        })
       );
 
-    expect(mockStageService.clearStageExpenseLink)
-      .toHaveBeenCalledWith('STAGE001', 'E001');
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        expenseId: 'E001',
+        itemName: '修改后的演唱会门票',
+        totalAmount: 880
+      })
+    );
   });
 
-  test('能够按分类和关键词筛选并计算消费汇总', () => {
-    mockStorageService.getCollection.mockReturnValue([
-      validExpense({
-        expenseId: 'E001',
-        itemName: '上海演唱会',
-        amount: 680,
-        location: '上海'
-      }),
-      validExpense({
-        expenseId: 'E002',
+  test('删除藏品消费时调用云端接口且不反向取消图鉴点亮', async () => {
+    mockApiService.request
+      .mockResolvedValueOnce({
+        expenseId: 'E300'
+      })
+      .mockResolvedValueOnce([]);
+
+    const removedExpense = {
+      expenseId: 'E300',
+      category: 'collection',
+      subType: 'goods',
+      collectionId: 'C001',
+      itemName: '测试徽章',
+      stageId: ''
+    };
+
+    const result =
+      await expenseService.removeExpenseAsync(
+        'E300',
+        removedExpense
+      );
+
+    expect(result).toBe(true);
+
+    expect(mockApiService.request)
+      .toHaveBeenNthCalledWith(
+        1,
+        {
+          baseUrl: 'http://expense.test',
+          url: '/expenses/E300?userId=test-user',
+          method: 'DELETE'
+        }
+      );
+
+    expect(mockApiService.request)
+      .toHaveBeenNthCalledWith(
+        2,
+        {
+          baseUrl: 'http://expense.test',
+          url: '/expenses?userId=test-user'
+        }
+      );
+
+    expect(mockStageService.unlightStage)
+      .not.toHaveBeenCalled();
+
+    expect(mockStageService.clearStageExpenseLink)
+      .not.toHaveBeenCalled();
+  });
+
+  test('云端记录能够按分类和关键词筛选并计算汇总', async () => {
+    const records = [
+      {
+        expenseId: 'E401',
         category: 'collection',
         subType: 'goods',
-        itemName: '北京徽章',
-        amount: 50,
-        date: '2026-07-09',
+        itemName: '纪念徽章',
+        amount: 100,
+        quantity: 2,
+        pricingMode: 'unit',
+        date: '2026-07-10',
         stageDate: '',
-        stageId: '',
-        location: '北京'
-      })
-    ]);
+        location: '',
+        seat: '',
+        remark: '',
+        city: '',
+        includeInTotal: true
+      },
+      {
+        expenseId: 'E402',
+        category: 'meet',
+        subType: 'concert',
+        itemName: '北京演唱会',
+        amount: 600,
+        quantity: 1,
+        pricingMode: 'direct',
+        date: '2026-07-11',
+        stageDate: '2026-07-11',
+        location: '北京',
+        seat: '',
+        remark: '',
+        city: '北京',
+        includeInTotal: true
+      }
+    ];
 
-    const meetResult = expenseService.filterExpenses({
-      category: 'meet',
-      keyword: '上海'
-    });
+    mockApiService.request.mockResolvedValue(records);
 
-    expect(meetResult).toHaveLength(1);
-    expect(meetResult[0].expenseId).toBe('E001');
+    const filtered =
+      await expenseService.filterExpensesAsync({
+        category: 'collection',
+        keyword: '徽章'
+      });
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].expenseId).toBe('E401');
 
     const summary =
-      expenseService.getExpenseSummary();
+      await expenseService.getExpenseSummaryAsync();
 
     expect(summary).toEqual({
-      totalAmount: 730,
-      actualAmount: 730,
+      totalAmount: 800,
+      actualAmount: 800,
       count: 2
     });
   });
 
-  test('分类统计包含全部消费和各主分类金额', () => {
-    mockStorageService.getCollection.mockReturnValue([
-      validExpense({
-        expenseId: 'E001',
-        amount: 680
-      }),
-      validExpense({
-        expenseId: 'E002',
+  test('云端分类统计包含全部消费和各主分类金额', async () => {
+    mockApiService.request.mockResolvedValue([
+      {
+        expenseId: 'E501',
         category: 'collection',
         subType: 'goods',
-        itemName: '测试周边',
-        amount: 120,
-        date: '2026-07-09',
-        stageDate: '',
-        stageId: ''
-      })
+        itemName: '纪念徽章',
+        amount: 100,
+        quantity: 2,
+        pricingMode: 'unit',
+        date: '2026-07-10',
+        includeInTotal: true
+      },
+      {
+        expenseId: 'E502',
+        category: 'meet',
+        subType: 'concert',
+        itemName: '上海演唱会',
+        amount: 600,
+        quantity: 1,
+        pricingMode: 'direct',
+        date: '2026-07-11',
+        includeInTotal: true
+      }
     ]);
 
     const stats =
-      expenseService.getCategoryStats();
+      await expenseService.getCategoryStatsAsync();
 
-    expect(stats.find((item) => item.id === 'all'))
-      .toEqual(
-        expect.objectContaining({
-          amount: 800,
-          actualAmount: 800,
-          count: 2
-        })
-      );
-
-    expect(stats.find((item) => item.id === 'meet'))
-      .toEqual(
-        expect.objectContaining({
-          amount: 680,
-          count: 1
-        })
-      );
+    expect(
+      stats.find((item) => item.id === 'all')
+    ).toEqual(
+      expect.objectContaining({
+        amount: 800,
+        actualAmount: 800,
+        count: 2
+      })
+    );
 
     expect(
       stats.find((item) => item.id === 'collection')
     ).toEqual(
       expect.objectContaining({
-        amount: 120,
+        amount: 200,
+        actualAmount: 200,
+        count: 1
+      })
+    );
+
+    expect(
+      stats.find((item) => item.id === 'meet')
+    ).toEqual(
+      expect.objectContaining({
+        amount: 600,
+        actualAmount: 600,
         count: 1
       })
     );

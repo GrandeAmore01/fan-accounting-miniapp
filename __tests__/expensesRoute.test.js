@@ -274,11 +274,17 @@ describe('后端 - expenses 路由', () => {
   });
 
   test('PUT /:expenseId 修改不存在的记录时返回404', async () => {
-    mockPool.execute.mockResolvedValue([
+    const connection = createConnection();
+
+    connection.execute.mockResolvedValueOnce([
       {
         affectedRows: 0
       }
     ]);
+
+    mockPool.getConnection.mockResolvedValue(
+      connection
+    );
 
     const req = {
       query: {
@@ -298,19 +304,86 @@ describe('后端 - expenses 路由', () => {
       next
     );
 
+    expect(mockPool.getConnection)
+      .toHaveBeenCalledTimes(1);
+
+    expect(connection.beginTransaction)
+      .toHaveBeenCalledTimes(1);
+
+    expect(connection.execute)
+      .toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE expenses'),
+        expect.objectContaining({
+          expenseId: 'E404',
+          userId: 'user-1'
+        })
+      );
+
+    expect(connection.commit)
+      .toHaveBeenCalledTimes(1);
+
+    expect(connection.rollback)
+      .not.toHaveBeenCalled();
+
+    expect(connection.release)
+      .toHaveBeenCalledTimes(1);
+
     expect(res.status).toHaveBeenCalledWith(404);
+
     expect(res.json).toHaveBeenCalledWith({
       ok: false,
       message: '消费记录不存在'
     });
+
+    expect(next).not.toHaveBeenCalled();
   });
 
   test('DELETE /:expenseId 成功删除指定用户消费记录', async () => {
-    mockPool.execute.mockResolvedValue([
-      {
-        affectedRows: 1
-      }
-    ]);
+    const connection = createConnection();
+
+    connection.execute
+      .mockResolvedValueOnce([[
+        {
+          expense_id: 'E001',
+          user_id: 'user-1',
+          category: 'collection',
+          sub_type: 'goods',
+          item_name: '测试徽章',
+          amount: '20',
+          quantity: '2',
+          expense_date: '2026-07-10',
+          payment_method: '',
+          seat: '',
+          location: '',
+          remark: '',
+          images_json: '[]',
+          fees_json: '{}',
+          outfield_only: 0,
+          include_in_total: 1,
+          collection_id: 'C001',
+          stage_id: '',
+          stage_date: null,
+          price_tier: null,
+          city: '',
+          purchase_channel: '',
+          pricing_mode: 'unit',
+          reference_price: null,
+          unit_price: '20',
+          expense_source: '',
+          base_amount: '40',
+          total_amount: '40',
+          included_amount: '40'
+        }
+      ]])
+      .mockResolvedValueOnce([
+        {
+          affectedRows: 1
+        }
+      ]);
+
+    mockPool.getConnection.mockResolvedValue(
+      connection
+    );
 
     const req = {
       query: {
@@ -330,13 +403,34 @@ describe('后端 - expenses 路由', () => {
       next
     );
 
-    expect(mockPool.execute).toHaveBeenCalledWith(
-      expect.stringContaining('DELETE FROM expenses'),
-      [
-        'E001',
-        'user-1'
-      ]
-    );
+    expect(mockPool.getConnection)
+      .toHaveBeenCalledTimes(1);
+
+    expect(connection.beginTransaction)
+      .toHaveBeenCalledTimes(1);
+
+    expect(connection.execute)
+      .toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('SELECT *'),
+        ['E001', 'user-1']
+      );
+
+    expect(connection.execute)
+      .toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('DELETE FROM expenses'),
+        ['E001', 'user-1']
+      );
+
+    expect(connection.commit)
+      .toHaveBeenCalledTimes(1);
+
+    expect(connection.rollback)
+      .not.toHaveBeenCalled();
+
+    expect(connection.release)
+      .toHaveBeenCalledTimes(1);
 
     expect(res.json).toHaveBeenCalledWith({
       ok: true,
@@ -344,5 +438,8 @@ describe('后端 - expenses 路由', () => {
         expenseId: 'E001'
       }
     });
+
+    expect(next).not.toHaveBeenCalled();
   });
+
 });
