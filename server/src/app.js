@@ -9,6 +9,9 @@ const collectionRoutes = require('./routes/collections');
 const userCollectionRoutes = require('./routes/userCollections');
 const userStageRoutes = require('./routes/userStages');
 const stageNoteRoutes = require('./routes/stageNotes');
+const authRoutes = require('./routes/auth');
+const budgetRoutes = require('./routes/budgets');
+const { requireAuth } = require('./utils/auth');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -24,7 +27,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.use('/api/auth', authRoutes);
+app.use('/api', requireAuth);
+
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/budgets', budgetRoutes);
 app.use('/api/stages', stageRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/user-collections', userCollectionRoutes);

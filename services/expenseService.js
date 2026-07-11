@@ -400,6 +400,7 @@ async function listExpensesAsync() {
     url: `/expenses${apiService.buildQuery({ userId: USER_ID })}`
   });
   expenseListCache = (data || []).map(enrichExpense);
+  require('./storageService').setCollection(USER_ID, 'expenses', expenseListCache);
   return expenseListCache;
 }
 
@@ -449,6 +450,7 @@ async function addExpenseAsync(expense) {
     });
     const nextExpense = enrichExpense(data);
     expenseListCache = [nextExpense, ...expenseListCache.filter((item) => item.expenseId !== nextExpense.expenseId)];
+    require('./storageService').setCollection(USER_ID, 'expenses', expenseListCache);
     syncStageLight(nextExpense);
     return { valid: true, data: nextExpense };
   } catch (error) {
@@ -478,6 +480,7 @@ async function updateExpenseAsync(expenseId, expense) {
     expenseListCache = expenseListCache.map((item) => (
       item.expenseId === nextExpense.expenseId ? nextExpense : item
     ));
+    require('./storageService').setCollection(USER_ID, 'expenses', expenseListCache);
     syncStageLight(nextExpense);
     return { valid: true, data: nextExpense };
   } catch (error) {
@@ -493,6 +496,7 @@ async function removeExpenseAsync(expenseId, removedExpense = null) {
     method: 'DELETE'
   });
   expenseListCache = expenseListCache.filter((item) => item.expenseId !== expenseId);
+  require('./storageService').setCollection(USER_ID, 'expenses', expenseListCache);
   await syncDeletedExpenseLinksAsync(removed);
   return true;
 }

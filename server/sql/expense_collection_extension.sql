@@ -15,7 +15,7 @@ ALTER TABLE expenses
     AFTER unit_price;
 
 CREATE TABLE IF NOT EXISTS user_collections (
-  user_id VARCHAR(64) NOT NULL,
+  user_id VARCHAR(64) COLLATE utf8mb4_bin NOT NULL,
   collection_id VARCHAR(64) NOT NULL,
   is_owned TINYINT(1) NOT NULL DEFAULT 0,
   light_time DATETIME NULL,

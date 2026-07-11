@@ -358,7 +358,7 @@ Page({
     });
   },
 
-  handleSaveBudget() {
+  async handleSaveBudget() {
     if (this.data.savingBudget) {
       return;
     }
@@ -414,7 +414,7 @@ Page({
     });
 
     try {
-      const result = budgetService.saveBudget({
+      const result = await budgetService.saveBudgetAsync({
         budgetType: this.data.selectedType,
         period,
         amount,
