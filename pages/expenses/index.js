@@ -196,6 +196,12 @@ Page({
       totalAmount: 0,
       count: 0
     },
+    activeSummary: {
+      name: '鍏ㄩ儴娑堣垂',
+      amountText: '0.00',
+      actualAmountText: '0.00',
+      count: 0
+    },
     categoryStats: [],
     budgetProgress: {
       percent: 0
@@ -228,6 +234,17 @@ Page({
       }));
       const summary = await expenseService.getExpenseSummaryAsync();
       const categoryStats = await expenseService.getCategoryStatsAsync();
+      const nextCategoryStats = categoryStats.map((item) => ({
+        ...item,
+        amountText: expenseService.formatMoney(item.amount),
+        actualAmountText: expenseService.formatMoney(item.actualAmount)
+      }));
+      const activeSummary = nextCategoryStats[this.data.activeCategoryIndex] || nextCategoryStats[0] || {
+        name: '鍏ㄩ儴娑堣垂',
+        amountText: '0.00',
+        actualAmountText: '0.00',
+        count: 0
+      };
       this.setData({
         expenses,
         summary: {
@@ -235,11 +252,8 @@ Page({
           totalAmountText: expenseService.formatMoney(summary.totalAmount),
           actualAmountText: expenseService.formatMoney(summary.actualAmount)
         },
-        categoryStats: categoryStats.map((item) => ({
-          ...item,
-          amountText: expenseService.formatMoney(item.amount),
-          actualAmountText: expenseService.formatMoney(item.actualAmount)
-        })),
+        activeSummary,
+        categoryStats: nextCategoryStats,
         budgetProgress: budgetService.getBudgetProgress()
       });
     } catch (error) {
@@ -1115,7 +1129,7 @@ Page({
     const expense = this.data.expenses.find((item) => item.expenseId === expenseId) || null;
     wx.showModal({
       title: '删除消费记录',
-      content: '删除后无法在本地恢复，确定要删除吗？',
+      content: '删除后无法恢复，确定要删除吗？',
       confirmText: '删除',
       confirmColor: '#9c4f00',
       success: async (res) => {

@@ -1,7 +1,6 @@
 const stageService = require('./stageService');
 const apiService = require('./apiService');
 const config = require('./config');
-const collectionService = require('./collectionService');
 
 const USER_ID = config.userId || 'local-user';
 const EXPENSE_API_BASE_URL = config.expenseApiBaseUrl || config.apiBaseUrl;
@@ -305,14 +304,6 @@ async function syncDeletedExpenseLinksAsync(removed) {
     }
   }
 
-  if (removed.collectionId) {
-    const hasRemainingCollectionExpense = expenses.some(
-      (item) => item.collectionId === removed.collectionId
-    );
-    if (!hasRemainingCollectionExpense) {
-      await collectionService.unlightCollection(removed.collectionId);
-    }
-  }
 }
 
 function addExpense(expense) {
