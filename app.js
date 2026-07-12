@@ -21,5 +21,11 @@ App({
     // 第一阶段使用本地缓存；云开发接口后续在 services 中逐步替换。
     const storage = require('./services/storageService');
     storage.initUserStorage(this.globalData.userId);
+
+    wx.onNetworkStatusChange((res) => {
+      if (res.isConnected) {
+        require('./services/stageService').invalidateStageCache();
+      }
+    });
   }
 });

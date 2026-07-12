@@ -50,13 +50,43 @@ Page({
   },
 
   onShow() {
+    this.bindNetworkReload();
     this.loadPage();
+  },
+
+  onHide() {
+    this.unbindNetworkReload();
+  },
+
+  bindNetworkReload() {
+    this.unbindNetworkReload();
+    this._networkReloadHandler = (res) => {
+      if (res.isConnected) {
+        stageService.invalidateStageCache();
+        this.loadPage();
+      }
+    };
+    wx.onNetworkStatusChange(this._networkReloadHandler);
+  },
+
+  unbindNetworkReload() {
+    if (this._networkReloadHandler) {
+      wx.offNetworkStatusChange(this._networkReloadHandler);
+      this._networkReloadHandler = null;
+    }
+  },
+
+  onPullDownRefresh() {
+    stageService.invalidateStageCache();
+    this.loadPage().finally(() => {
+      wx.stopPullDownRefresh();
+    });
   },
 
   async loadPage() {
     this.setData({ loading: true });
     try {
-      await stageService.ensureStagesLoaded();
+      await stageService.ensureStagesLoaded({ refresh: true });
       this.refreshPage();
     } catch (error) {
       wx.showToast({ title: '舞台数据加载失败', icon: 'none' });

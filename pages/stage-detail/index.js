@@ -29,7 +29,7 @@ Page({
   async loadDetail() {
     this.setData({ loading: true, loadError: '' });
     try {
-      await stageService.ensureStagesLoaded();
+      await stageService.ensureStagesLoaded({ refresh: true });
       const detail = stageService.getStageDetail(this.data.stageId);
       if (!detail) {
         this.setData({
