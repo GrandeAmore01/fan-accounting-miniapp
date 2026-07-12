@@ -54,7 +54,7 @@ Page({
   async loadPage() {
     this.setData({ loading: true });
     try {
-      await stageService.ensureStagesLoaded();
+      await stageService.ensureStagesLoaded({ refresh: true });
       this.refreshReport();
     } catch (error) {
       wx.showToast({ title: '回忆数据加载失败', icon: 'none' });

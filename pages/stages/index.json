@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "舞台记录",
+  "enablePullDownRefresh": true,
   "usingComponents": {
     "meet-expense-modal": "/components/meet-expense-modal/index"
   }

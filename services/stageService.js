@@ -82,6 +82,8 @@ function matchesMeetCategory(stage, category) {
 let stageCache = [];
 let albumLibrary = [];
 let stageLoadPromise = null;
+let stageCacheLoadedFromCloud = false;
+const LOCAL_STAGE_IDS = new Set(localStages.map((item) => item.stageId));
 let userStateByStageId = {};
 let noteByStageId = {};
 let expenseListCache = null;
@@ -161,9 +163,8 @@ async function loadUserStateFromCloud() {
     storageService.setCollection(USER_ID, 'userStages', userStages || []);
     storageService.setCollection(USER_ID, 'stageNotes', stageNotes || []);
   } catch (error) {
-    console.warn('舞台用户状态 API 加载失败', error);
-    userStateByStageId = {};
-    noteByStageId = {};
+    console.warn('舞台用户状态 API 加载失败，回退本地缓存', error);
+    hydrateUserStateFromLocal();
   }
 }
 
@@ -245,22 +246,48 @@ function buildAlbumLibraryFromStages(stages) {
 
 async function loadStageData() {
   if (config.useStageBackend) {
-    try {
-      const data = await requestStageApi({ url: '/stages' });
-      stageCache = (data.stages || []).map((item) => ({ ...item }));
-      albumLibrary = data.albums || buildAlbumLibraryFromStages(stageCache);
-      injectCountdownPlaceholderStage();
-      pruneOrphanLocalData();
-      return stageCache;
-    } catch (error) {
-      console.warn('舞台数据 API 加载失败，回退本地数据', error);
-    }
+    const data = await requestStageApi({ url: '/stages' });
+    stageCache = (data.stages || []).map((item) => ({ ...item }));
+    albumLibrary = data.albums || buildAlbumLibraryFromStages(stageCache);
+    injectCountdownPlaceholderStage();
+    pruneOrphanLocalData();
+    stageCacheLoadedFromCloud = true;
+    return stageCache;
   }
   stageCache = localStages.map(normalizeLocalStage);
   albumLibrary = buildAlbumLibraryFromStages(stageCache);
   injectCountdownPlaceholderStage();
   pruneOrphanLocalData();
+  stageCacheLoadedFromCloud = false;
   return stageCache;
+}
+
+function isLocalFallbackCache() {
+  if (!config.useStageBackend || !stageCache.length) {
+    return false;
+  }
+  const realStages = stageCache.filter((item) => item.stageId !== COUNTDOWN_PLACEHOLDER_STAGE_ID);
+  if (!realStages.length) {
+    return false;
+  }
+  return realStages.every((item) => LOCAL_STAGE_IDS.has(item.stageId));
+}
+
+function shouldReloadStageCatalog(options = {}) {
+  if (options.force || options.refresh) {
+    return true;
+  }
+  if (!config.useStageBackend) {
+    return !stageCache.length;
+  }
+  return !stageCache.length || !stageCacheLoadedFromCloud || isLocalFallbackCache();
+}
+
+function invalidateStageCache() {
+  stageCache = [];
+  albumLibrary = [];
+  stageCacheLoadedFromCloud = false;
+  stageLoadPromise = null;
 }
 
 function injectCountdownPlaceholderStage() {
@@ -287,11 +314,21 @@ function pruneOrphanLocalData() {
   }
 }
 
-function ensureStagesLoaded() {
+function ensureStagesLoaded(options = {}) {
   if (!stageLoadPromise) {
     stageLoadPromise = (async () => {
-      if (!stageCache.length) {
-        await loadStageData();
+      if (shouldReloadStageCatalog(options)) {
+        try {
+          await loadStageData();
+        } catch (error) {
+          console.warn('舞台数据 API 加载失败', error);
+          if (config.useStageBackend && (!stageCacheLoadedFromCloud || isLocalFallbackCache())) {
+            stageCache = [];
+            albumLibrary = [];
+            stageCacheLoadedFromCloud = false;
+          }
+          throw error;
+        }
       }
       await loadUserStateFromCloud();
       await loadExpenseCache();
@@ -1359,6 +1396,7 @@ function getStageDashboard(filter = {}) {
 
 module.exports = {
   ensureStagesLoaded,
+  invalidateStageCache,
   getYearOptions,
   getStatsYearOptions,
   getMeetCategoryOptions,
