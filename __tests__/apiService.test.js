@@ -28,6 +28,10 @@ describe('M2 - apiService.buildQuery', () => {
 describe('M2 - apiService.request 云托管请求', () => {
   beforeEach(() => {
     global.wx = {
+      getStorageSync: jest.fn(() => 'test-token'),
+      setStorageSync: jest.fn(),
+      removeStorageSync: jest.fn(),
+      login: jest.fn(),
       cloud: {
         callContainer: jest.fn()
       }
@@ -111,3 +115,4 @@ describe('M2 - apiService.request 云托管请求', () => {
     })).rejects.toThrow('callContainer:fail timeout');
   });
 });
+
