@@ -137,8 +137,7 @@ describe('消费页面表单边界与日期联动', () => {
     jest.clearAllMocks();
   });
 
-  test.failing(
-    '已知缺陷 DEF-EXP-103：官方见面消费重新选择未匹配日期时不应清空金额',
+  test('已知缺陷 DEF-EXP-103：官方见面消费重新选择未匹配日期时不应清空金额',
     () => {
       const page = createPage();
 

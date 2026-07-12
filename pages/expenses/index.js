@@ -837,7 +837,7 @@ Page({
         'formData.itemName': this.data.matchedMeetStageName ? fallbackName : this.data.formData.itemName || fallbackName,
         'formData.city': this.data.matchedMeetStageName ? '' : this.data.formData.city,
         'formData.location': this.data.matchedMeetStageName ? '' : this.data.formData.location,
-        'formData.amount': this.data.formData.purchaseChannel === 'official' ? '' : this.data.formData.amount,
+        'formData.amount': this.data.formData.amount,
         'formData.priceTier': '',
         priceTiers: [],
         priceTierLabels: [],
