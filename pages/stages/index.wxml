@@ -86,7 +86,7 @@
     </view>
   </view>
 
-  <view class="card" wx:if="{{stages.length === 0 && !loading}}">
+  <view class="card" wx:if="{{stageListTotal === 0 && !loading}}">
     <view class="empty">暂无符合条件的舞台场次。</view>
   </view>
 
@@ -104,36 +104,12 @@
     <view class="card-actions" catchtap="stopTap">
       <button wx:if="{{item.isLighted}}" class="secondary-button" data-id="{{item.stageId}}" bindtap="handleUnlightStage">取消点亮</button>
       <button wx:else class="primary-button" data-id="{{item.stageId}}" bindtap="handleLightStage">点亮舞台</button>
-      <button class="secondary-button" data-id="{{item.stageId}}" bindtap="handleOpenDetail">查看详情</button>
+      <button class="secondary-button" data-id="{{item.stageId}}" bindtap="handleOpenDetail">查看详情/观演备注</button>
     </view>
   </view>
 
-  <view class="card">
-    <view class="section-head">
-      <text class="card-title">按年份统计</text>
-      <picker mode="selector" range="{{statsYearOptions}}" range-key="name" value="{{statsYearIndex}}" bindchange="handleStatsYearChange">
-        <view class="picker-field compact-picker">{{statsYearOptions[statsYearIndex].name}}</view>
-      </picker>
-    </view>
-    <block wx:if="{{yearStats.hasRecords}}">
-      <view class="stats-grid">
-        <view class="stats-item"><text class="muted">点亮场次</text><text class="metric">{{yearStats.lightedCount}}</text></view>
-        <view class="stats-item"><text class="muted">解锁歌曲</text><text class="metric">{{yearStats.unlockedSongCount}}</text></view>
-        <view class="stats-item"><text class="muted">城市数</text><text class="metric">{{yearStats.cityCount}}</text></view>
-        <view class="stats-item"><text class="muted">歌曲出现</text><text class="metric">{{yearStats.songAppearCount}}</text></view>
-      </view>
-      <text class="muted section-gap">当年常听歌曲</text>
-      <view class="song-item" wx:for="{{yearStats.topSongs}}" wx:key="songName">
-        <text class="song-name">{{item.songName}}</text>
-        <text class="tag">{{item.count}} 次</text>
-      </view>
-      <text class="muted section-gap">当年点亮场次</text>
-      <view class="year-stage-item" wx:for="{{yearStats.stages}}" wx:key="stageId" data-id="{{item.stageId}}" bindtap="handleOpenDetail">
-        <text class="song-name">{{item.stageName}}</text>
-        <text class="muted">{{item.date}} · {{item.cityName}}</text>
-      </view>
-    </block>
-    <view wx:else class="empty">该年份还没有点亮场次，先去上方列表点亮吧。</view>
+  <view class="load-more-wrap" wx:if="{{showLoadMore}}">
+    <button class="secondary-button load-more-button" bindtap="handleLoadMore">加载更多</button>
   </view>
 
   <view class="card">

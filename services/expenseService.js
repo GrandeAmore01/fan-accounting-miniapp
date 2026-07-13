@@ -257,9 +257,6 @@ function validateExpense(expense) {
     if (!isValidDateText(nextExpense.stageDate)) {
       return { valid: false, message: '见面日期格式不正确' };
     }
-    if (nextExpense.date > nextExpense.stageDate) {
-      return { valid: false, message: '消费日期不能晚于见面日期' };
-    }
   }
   if (nextExpense.itemName.length > MAX_NAME_LENGTH) {
     return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
@@ -516,16 +513,25 @@ async function updateExpenseAsync(expenseId, expense) {
   }
 }
 
-async function removeExpenseAsync(expenseId, removedExpense = null) {
+async function removeExpenseAsync(expenseId, removedExpense = null, options = {}) {
   const removed = removedExpense || (await listExpensesAsync()).find((item) => item.expenseId === expenseId);
-  await apiService.request({
-    baseUrl: EXPENSE_API_BASE_URL,
-    url: `/expenses/${expenseId}${apiService.buildQuery({ userId: USER_ID })}`,
-    method: 'DELETE'
-  });
-  expenseListCache = expenseListCache.filter((item) => item.expenseId !== expenseId);
-  require('./storageService').setCollection(USER_ID, 'expenses', expenseListCache);
-  await syncDeletedExpenseLinksAsync(removed);
+  try {
+    await apiService.request({
+      baseUrl: EXPENSE_API_BASE_URL,
+      url: `/expenses/${expenseId}${apiService.buildQuery({ userId: USER_ID })}`,
+      method: 'DELETE'
+    });
+  } catch (error) {
+    const message = error.message || '';
+    if (!/不存在|404/.test(message)) {
+      throw error;
+    }
+  }
+  expenseListCache = (expenseListCache || []).filter((item) => item.expenseId !== expenseId);
+  require('./storageService').setCollection(USER_ID, 'expenses', expenseListCache || []);
+  if (!options.skipStageSync) {
+    await syncDeletedExpenseLinksAsync(removed);
+  }
   return true;
 }
 

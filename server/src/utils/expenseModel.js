@@ -141,9 +141,6 @@ function validateExpense(expense) {
     if (!isValidDateText(expense.stageDate)) {
       return { valid: false, message: '见面日期格式不正确' };
     }
-    if (expense.date > expense.stageDate) {
-      return { valid: false, message: '消费日期不能晚于见面日期' };
-    }
   }
   if (String(expense.itemName || '').length > MAX_NAME_LENGTH) {
     return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };

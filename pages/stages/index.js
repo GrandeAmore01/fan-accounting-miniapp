@@ -1,16 +1,15 @@
 const stageService = require('../../services/stageService');
 
+const CONCERT_STAGE_PAGE_SIZE = 10;
+
 Page({
   data: {
-    loading: true,
-    stageTypeOptions: [
+    loading: true,    stageTypeOptions: [
       { id: 'concert', name: '演唱会' },
       { id: 'special', name: '运动会/新年音乐会' }
     ],
     stageTypeIndex: 0,
     yearOptions: [{ id: 'all', name: '全部年份' }],
-    statsYearOptions: [],
-    statsYearIndex: 0,
     statusOptions: [
       { id: 'all', name: '全部状态' },
       { id: 'lighted', name: '已点亮' },
@@ -20,8 +19,10 @@ Page({
     statusIndex: 0,
     keyword: '',
     stages: [],
-    songSearchResults: [],
-    stats: {
+    stageListTotal: 0,
+    stageListShown: 0,
+    showLoadMore: false,
+    songSearchResults: [],    stats: {
       total: 0,
       lightedCount: 0,
       unlockedSongCount: 0,
@@ -35,16 +36,6 @@ Page({
     },
     songStats: [],
     albumProgress: [],
-    yearStats: {
-      year: '',
-      hasRecords: false,
-      lightedCount: 0,
-      unlockedSongCount: 0,
-      cityCount: 0,
-      songAppearCount: 0,
-      topSongs: [],
-      stages: []
-    },
     expenseModalVisible: false,
     expenseModalStageId: ''
   },
@@ -96,35 +87,66 @@ Page({
   },
 
   refreshPage() {
-    const statsYearOptions = stageService.getStatsYearOptions();
     const yearOptions = stageService.getYearOptions();
     const stageTypeOptions = stageService.getMeetCategoryOptions();
-    const statsYearIndex = Math.min(this.data.statsYearIndex, Math.max(statsYearOptions.length - 1, 0));
     const stageTypeIndex = Math.min(this.data.stageTypeIndex, Math.max(stageTypeOptions.length - 1, 0));
     const activeStageType = stageTypeOptions[stageTypeIndex].id;
     const dashboard = stageService.getStageDashboard({
       stageType: activeStageType,
       year: yearOptions[this.data.yearIndex] ? yearOptions[this.data.yearIndex].id : 'all',
       lightStatus: this.data.statusOptions[this.data.statusIndex].id,
-      keyword: this.data.keyword,
-      statsYear: statsYearOptions[statsYearIndex] ? statsYearOptions[statsYearIndex].id : ''
+      keyword: this.data.keyword
     });
+    this._filteredStages = dashboard.stages || [];
+    this._activeStageType = activeStageType;
+    const listView = this.buildStageListView(this._filteredStages, activeStageType, true);
     this.setData({
       stageTypeOptions,
       stageTypeIndex,
       yearOptions,
-      statsYearOptions,
-      statsYearIndex,
       meetTimeline: dashboard.meetTimeline,
-      stages: dashboard.stages,
+      stages: listView.stages,
+      stageListTotal: listView.stageListTotal,
+      stageListShown: listView.stageListShown,
+      showLoadMore: listView.showLoadMore,
       songSearchResults: dashboard.songSearchResults,
       stats: dashboard.stats,
       songStats: dashboard.songStats,
-      albumProgress: dashboard.albumProgress,
-      yearStats: dashboard.yearStats
+      albumProgress: dashboard.albumProgress
     });
   },
 
+  buildStageListView(allStages, activeStageType, resetPage) {
+    const isConcertTab = activeStageType === 'concert';
+    if (resetPage || !this._visibleCount) {
+      this._visibleCount = CONCERT_STAGE_PAGE_SIZE;
+    }
+    const total = allStages.length;
+    const visibleCount = isConcertTab ? Math.min(this._visibleCount, total) : total;
+    if (!isConcertTab) {
+      this._visibleCount = total;
+    }
+    return {
+      stages: allStages.slice(0, visibleCount),
+      stageListTotal: total,
+      stageListShown: visibleCount,
+      showLoadMore: isConcertTab && visibleCount < total
+    };
+  },
+
+  handleLoadMore() {
+    const activeStageType = this._activeStageType || 'concert';
+    if (activeStageType !== 'concert') {
+      return;
+    }
+    this._visibleCount = (this._visibleCount || CONCERT_STAGE_PAGE_SIZE) + CONCERT_STAGE_PAGE_SIZE;
+    const listView = this.buildStageListView(this._filteredStages || [], activeStageType, false);
+    this.setData({
+      stages: listView.stages,
+      stageListShown: listView.stageListShown,
+      showLoadMore: listView.showLoadMore
+    });
+  },
   handleKeywordInput(event) {
     this.setData({ keyword: event.detail.value });
     this.refreshPage();
@@ -137,11 +159,6 @@ Page({
 
   handleYearChange(event) {
     this.setData({ yearIndex: Number(event.detail.value) });
-    this.refreshPage();
-  },
-
-  handleStatsYearChange(event) {
-    this.setData({ statsYearIndex: Number(event.detail.value) });
     this.refreshPage();
   },
 

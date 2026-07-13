@@ -24,7 +24,8 @@ Page({
       unlockedSongCount: 0,
       cityCount: 0,
       stageSpending: '0.00',
-      expenseCount: 0,
+      linkedSpending: '0.00',
+      linkedExpenseCount: 0,
       songAppearCount: 0,
       topCity: { name: '暂无记录', count: 0 },
       topSongs: []

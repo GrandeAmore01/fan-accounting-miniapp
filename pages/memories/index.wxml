@@ -19,7 +19,7 @@
     <block wx:if="{{annualReport.hasRecords}}">
       <text class="memory-line">{{annualReport.year}} 年你一共见面 <text class="highlight">{{annualReport.meetCount}}</text> 次。</text>
       <text class="memory-line">本年度解锁歌曲 <text class="highlight">{{annualReport.unlockedSongCount}}</text> 首，走过 <text class="highlight">{{annualReport.cityCount}}</text> 个城市。</text>
-      <text class="memory-line">舞台相关花费 <text class="highlight">{{annualReport.stageSpending}}</text> 元，关联消费 <text class="highlight">{{annualReport.expenseCount}}</text> 笔。</text>
+      <text class="memory-line">舞台花费 <text class="highlight">{{annualReport.stageSpending}}</text> 元，关联花费 <text class="highlight">{{annualReport.linkedSpending}}</text> 元<text wx:if="{{annualReport.linkedExpenseCount}}">（{{annualReport.linkedExpenseCount}} 笔交通、住宿）</text>。</text>
       <text class="memory-line">歌曲累计出现 <text class="highlight">{{annualReport.songAppearCount}}</text> 次，常去城市是 <text class="highlight">{{annualReport.topCity.name}}</text>。</text>
       <text class="muted section-gap">本年度常听歌曲</text>
       <text class="section-hint block-hint">仅统计 {{annualReport.year}} 年、{{typeOptions[activeTypeIndex].name}}已点亮场次</text>

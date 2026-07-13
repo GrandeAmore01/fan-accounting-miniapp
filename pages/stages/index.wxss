@@ -292,3 +292,13 @@
 .stage-card {
   cursor: pointer;
 }
+
+.load-more-wrap {
+  margin: 0 0 24rpx;
+}
+
+.load-more-button {
+  width: 100%;
+  margin: 0;
+  font-size: 26rpx;
+}

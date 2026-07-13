@@ -2143,13 +2143,6 @@ Page({
   },
 
   getExpenseDateEnd(formData = {}, today = this.getToday()) {
-    if (
-      formData.category === 'meet' &&
-      formData.stageDate &&
-      formData.stageDate < today
-    ) {
-      return formData.stageDate;
-    }
     return today;
   },
 
@@ -2208,8 +2201,6 @@ Page({
     if (formData.category === 'meet') {
       if (!String(formData.stageDate || '').trim()) {
         errors.stageDate = '请选择见面日期';
-      } else if (formData.date && formData.date > formData.stageDate) {
-        errors.date = '消费日期不能晚于见面日期';
       }
     }
     if (!String(formData.itemName || '').trim()) {
