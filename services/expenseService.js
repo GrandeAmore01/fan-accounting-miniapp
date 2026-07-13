@@ -94,6 +94,9 @@ function getCategoryName(categoryId, subTypeId) {
   if (!mainType) {
     return '其他消费';
   }
+  if (categoryId === 'transport' || categoryId === 'accommodation') {
+    return mainType.name;
+  }
   return subType ? `${mainType.name} / ${subType.name}` : mainType.name;
 }
 
@@ -221,6 +224,17 @@ function normalizeExpense(expense) {
   };
 }
 
+function getTodayText() {
+  const date = new Date();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function isValidDateText(dateText) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(dateText || ''));
+}
+
 function validateExpense(expense) {
   const nextExpense = normalizeExpense(expense);
   const amountText = String(expense.amount || '').trim();
@@ -230,8 +244,22 @@ function validateExpense(expense) {
   if (!nextExpense.date) {
     return { valid: false, message: '请选择消费日期' };
   }
+  if (!isValidDateText(nextExpense.date)) {
+    return { valid: false, message: '消费日期格式不正确' };
+  }
+  if (nextExpense.date > getTodayText()) {
+    return { valid: false, message: '消费日期不能晚于今天' };
+  }
   if (nextExpense.category === 'meet' && !nextExpense.stageDate) {
     return { valid: false, message: '请选择见面日期' };
+  }
+  if (nextExpense.category === 'meet') {
+    if (!isValidDateText(nextExpense.stageDate)) {
+      return { valid: false, message: '见面日期格式不正确' };
+    }
+    if (nextExpense.date > nextExpense.stageDate) {
+      return { valid: false, message: '消费日期不能晚于见面日期' };
+    }
   }
   if (nextExpense.itemName.length > MAX_NAME_LENGTH) {
     return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
