@@ -141,6 +141,8 @@ Component({
     stageDateOptions: [],
     stageDateLabels: [],
     stageDateIndex: 0,
+    today: getTodayText(),
+    expenseDateEnd: getTodayText(),
     formData: createDefaultFormData()
   },
 
@@ -188,6 +190,8 @@ Component({
       this.setData({
         meetStages,
         formData,
+        today: getTodayText(),
+        expenseDateEnd: getTodayText(),
         categoryIndex: 0,
         paymentMethodIndex: 0,
         purchaseChannelIndex: 0,
@@ -210,8 +214,28 @@ Component({
       const concertStages = (this.data.meetStages || []).filter(
         (item) => inferMeetStageType(item) === stageType
       );
+      const nextFormData = {
+        ...this.data.formData,
+        subType: stageType,
+        stageId: stage.stageId,
+        stageDate: stage.date,
+        itemName: stage.stageName,
+        city: stage.city || '',
+        location: stage.venue || stage.location || '',
+        amount: shouldUseOfficialTier && priceTiers.length ? String(priceTiers[0]) : '',
+        priceTier: priceTiers.length ? String(priceTiers[0]) : '',
+        pricingMode: shouldUseOfficialTier && priceTiers.length ? 'official_unit' : 'total',
+        paymentMethod: this.data.paymentMethods[this.data.paymentMethodIndex]
+      };
+      const today = this.data.today || getTodayText();
+      const expenseDateEnd = this.getExpenseDateEnd(nextFormData, today);
+      if (nextFormData.date && nextFormData.date > expenseDateEnd) {
+        nextFormData.date = expenseDateEnd;
+      }
       this.setData({
         ...extraState,
+        today,
+        expenseDateEnd,
         subTypes,
         subTypeIndex,
         concertStages,
@@ -220,19 +244,7 @@ Component({
         priceTierIndex: 0,
         matchedMeetStageName: stage.stageName,
         searchKeyword: stage.stageName,
-        formData: {
-          ...this.data.formData,
-          subType: stageType,
-          stageId: stage.stageId,
-          stageDate: stage.date,
-          itemName: stage.stageName,
-          city: stage.city || '',
-          location: stage.venue || stage.location || '',
-          amount: shouldUseOfficialTier && priceTiers.length ? String(priceTiers[0]) : '',
-          priceTier: priceTiers.length ? String(priceTiers[0]) : '',
-          pricingMode: shouldUseOfficialTier && priceTiers.length ? 'official_unit' : 'total',
-          paymentMethod: this.data.paymentMethods[this.data.paymentMethodIndex]
-        }
+        formData: nextFormData
       });
     },
 
@@ -275,6 +287,13 @@ Component({
 
     handleDateChange(event) {
       this.setData({ 'formData.date': event.detail.value });
+    },
+
+    getExpenseDateEnd(formData = {}, today = getTodayText()) {
+      if (formData.stageDate && formData.stageDate < today) {
+        return formData.stageDate;
+      }
+      return today;
     },
 
     handlePaymentMethodChange(event) {

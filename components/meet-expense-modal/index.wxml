@@ -23,7 +23,7 @@
     <view class="field-grid">
       <view class="form-field">
         <text class="field-label">消费日期</text>
-        <picker mode="date" value="{{formData.date}}" bindchange="handleDateChange">
+        <picker mode="date" value="{{formData.date}}" end="{{expenseDateEnd}}" bindchange="handleDateChange">
           <view class="picker-field">{{formData.date || '请选择日期'}}</view>
         </picker>
       </view>

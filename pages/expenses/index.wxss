@@ -75,22 +75,30 @@
 }
 
 .modal-panel {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-height: 88vh;
   padding: 0 30rpx 30rpx;
-  overflow-y: auto;
+  overflow: hidden;
   border-radius: 20rpx 20rpx 16rpx 16rpx;
   background: #fffef9;
 }
 
 .modal-header {
-  position: sticky;
-  top: 0;
   z-index: 2;
   margin: 0 -30rpx 18rpx;
   padding: 28rpx 30rpx 20rpx;
   border-bottom: 1rpx solid #f1e4b6;
   background: #fffef9;
+}
+
+.modal-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: calc(88vh - 230rpx);
+  padding-bottom: 24rpx;
+  box-sizing: border-box;
 }
 
 .close-button {
@@ -121,6 +129,7 @@
 }
 
 .form-field {
+  position: relative;
   margin-bottom: 20rpx;
 }
 
@@ -165,10 +174,64 @@
   font-weight: 600;
 }
 
+.field-error-dot {
+  display: inline-block;
+  width: 12rpx;
+  height: 12rpx;
+  margin-right: 8rpx;
+  border-radius: 50%;
+  background: #d93025;
+  vertical-align: 4rpx;
+}
+
+.field-warning-dot {
+  display: inline-block;
+  width: 12rpx;
+  height: 12rpx;
+  margin-right: 8rpx;
+  border-radius: 50%;
+  background: #d6a400;
+  vertical-align: 4rpx;
+}
+
+.field-invalid {
+  border-color: #d93025 !important;
+  background: #fff8f7 !important;
+}
+
+.field-warning {
+  border-color: #d6a400 !important;
+  background: #fffdf4 !important;
+}
+
+.field-error-text {
+  display: block;
+  margin-top: 8rpx;
+  color: #d93025;
+  font-size: 22rpx;
+  line-height: 1.35;
+}
+
+.field-warning-text {
+  display: block;
+  margin-top: 8rpx;
+  color: #9c6a00;
+  font-size: 22rpx;
+  line-height: 1.35;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18rpx;
+}
+
+.bundle-cost-panel {
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border: 1rpx dashed #eadca8;
+  border-radius: 12rpx;
+  background: #fffdf4;
 }
 
 .fee-single {
@@ -189,9 +252,80 @@
   border-bottom: 0;
 }
 
+.search-result-panel {
+  margin-top: 10rpx;
+  overflow: hidden;
+  border: 1rpx solid #efe0a8;
+  border-radius: 12rpx;
+  background: #ffffff;
+}
+
+.warning-suggestion-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 126rpx;
+  z-index: 8;
+  margin-top: 0;
+  border-color: #f0d878;
+  background: #fffdf4;
+  box-shadow: 0 10rpx 24rpx rgba(118, 88, 0, 0.14);
+}
+
+.warning-option-field .field-warning-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 126rpx;
+  z-index: 7;
+  margin-top: 0;
+  padding: 10rpx 14rpx;
+  border: 1rpx solid #f0d878;
+  border-radius: 10rpx;
+  background: #fffdf4;
+  box-shadow: 0 8rpx 20rpx rgba(118, 88, 0, 0.1);
+}
+
 .search-hit {
   color: #d12b2b;
   font-weight: 800;
+}
+
+.date-option-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.date-option-row > view {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.date-option {
+  display: inline-flex;
+  min-height: 64rpx;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18rpx;
+  border: 1rpx solid #eadca8;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #5f543e;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 64rpx;
+}
+
+.date-option-active {
+  border-color: #d6a400;
+  background: #fff2bf;
+  color: #8a6400;
+}
+
+.date-option-other {
+  background: #fffdf4;
 }
 
 .image-grid {
@@ -256,6 +390,13 @@
 
 .modal-actions button {
   flex: 1;
+}
+
+.modal-actions {
+  flex-shrink: 0;
+  margin-top: 14rpx;
+  padding-top: 16rpx;
+  background: #fffef9;
 }
 
 .expense-page {
@@ -435,7 +576,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 18rpx;
-  margin-bottom: 18rpx;
+  margin-bottom: 14rpx;
 }
 
 .filter-chip {
@@ -475,14 +616,31 @@
 
 .extra-switch {
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12rpx;
   color: #5f543e;
   font-size: 23rpx;
   line-height: 1.35;
-  text-align: right;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.filter-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin-bottom: 18rpx;
+}
+
+.filter-switch-row .extra-switch:first-child {
+  justify-content: flex-start;
+}
+
+.filter-switch-row .extra-switch:last-child {
+  justify-content: flex-end;
 }
 
 .add-expense-button {
@@ -541,6 +699,40 @@
   line-height: 44rpx;
 }
 
+.bundle-tag {
+  display: inline-flex;
+  min-height: 44rpx;
+  align-items: center;
+  padding: 0 14rpx;
+  border-radius: 8rpx;
+  background: #f7efe0;
+  color: #8a6400;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 44rpx;
+}
+
+.bundle-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 8rpx;
+}
+
+.bundle-link-note {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 38rpx;
+  align-items: center;
+  padding: 0 12rpx;
+  border-radius: 8rpx;
+  background: #fff8dc;
+  color: #8a6400;
+  font-size: 21rpx;
+  font-weight: 700;
+  line-height: 38rpx;
+}
+
 .expense-card .amount {
   flex-shrink: 0;
   color: #a06a00;
@@ -585,6 +777,195 @@
   color: #827866;
   font-size: 25rpx;
   line-height: 1.45;
+}
+
+.expense-note-wrap {
+  margin-top: 10rpx;
+}
+
+.expense-note-wrap .expense-note {
+  margin-top: 0;
+}
+
+.remark-toggle {
+  display: inline-block;
+  margin-top: 8rpx;
+  color: #a06a00;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.remark-tag-row,
+.quick-tag-row,
+.selected-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.remark-tag-row {
+  margin-top: 10rpx;
+}
+
+.quick-tag-row {
+  margin-top: 12rpx;
+}
+
+.selected-tag-row {
+  margin-bottom: 12rpx;
+}
+
+.remark-tag,
+.quick-tag,
+.selected-tag {
+  display: inline-flex;
+  min-height: 40rpx;
+  align-items: center;
+  padding: 0 12rpx;
+  border-radius: 8rpx;
+  background: #fff8dc;
+  color: #8a6400;
+  font-size: 21rpx;
+  font-weight: 700;
+  line-height: 40rpx;
+}
+
+.quick-tag {
+  min-height: 48rpx;
+  padding: 0 16rpx;
+  border: 1rpx solid #eadca8;
+  background: #fffef9;
+  color: #6d5b2b;
+  font-size: 23rpx;
+  line-height: 48rpx;
+}
+
+.quick-tag-active {
+  border-color: #d6a400;
+  background: #fff2bf;
+  color: #8a6400;
+}
+
+.selected-tag {
+  min-height: 52rpx;
+  gap: 8rpx;
+  padding: 0 10rpx 0 16rpx;
+  border: 1rpx solid #d6a400;
+  background: #fff2bf;
+  color: #7a5a00;
+  font-size: 24rpx;
+  line-height: 52rpx;
+}
+
+.selected-tag-close {
+  display: inline-flex;
+  width: 34rpx;
+  height: 34rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(138, 100, 0, 0.14);
+  color: #8a6400;
+  font-size: 26rpx;
+  font-weight: 800;
+  line-height: 34rpx;
+}
+
+.custom-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.custom-tag-input {
+  flex: 1;
+  min-width: 0;
+  height: 58rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #eadca8;
+  border-radius: 10rpx;
+  background: #fffef9;
+  color: #2d2718;
+  font-size: 24rpx;
+  box-sizing: border-box;
+}
+
+.custom-tag-button {
+  flex: 0 0 120rpx;
+  min-width: 120rpx;
+  height: 58rpx;
+  padding: 0;
+  border-radius: 10rpx;
+  background: #fff2bf;
+  color: #8a6400;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 58rpx;
+}
+
+.delete-dialog {
+  width: 100%;
+  padding: 0 30rpx 30rpx;
+  border-radius: 20rpx 20rpx 16rpx 16rpx;
+  background: #fffef9;
+}
+
+.delete-dialog-header {
+  margin: 0 -30rpx;
+  padding: 30rpx;
+  border-bottom: 1rpx solid #f1e4b6;
+}
+
+.delete-dialog-body {
+  padding: 24rpx 0 10rpx;
+}
+
+.delete-warning,
+.delete-target,
+.delete-linked-tip {
+  display: block;
+  color: #5f543e;
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+
+.delete-warning {
+  color: #8f3d1f;
+  font-weight: 700;
+}
+
+.delete-target {
+  margin-top: 12rpx;
+}
+
+.delete-linked-box {
+  margin-top: 20rpx;
+  padding: 18rpx;
+  border: 1rpx solid #eadca8;
+  border-radius: 12rpx;
+  background: #fffdf4;
+}
+
+.delete-check-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  color: #2d2718;
+  font-size: 25rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.delete-linked-tip {
+  margin-top: 10rpx;
+  color: #827866;
+  font-size: 23rpx;
+}
+
+.delete-confirm-button {
+  background: #9c4f00;
 }
 
 .fee-tags {
