@@ -34,7 +34,8 @@
   <view class="card">
     <view class="section-head">
       <text class="card-title">观演备注</text>
-      <text class="link-text" bindtap="handleToggleNoteEdit">{{editingNote ? '取消' : '编辑'}}</text>
+      <text wx:if="{{detail.isLighted}}" class="link-text" bindtap="handleToggleNoteEdit">{{editingNote ? '取消' : '编辑'}}</text>
+      <text wx:else class="muted">点亮后可编辑</text>
     </view>
     <block wx:if="{{editingNote}}">
       <view class="form-field">
@@ -47,7 +48,7 @@
       </view>
       <view class="form-field">
         <text class="field-label">实际票价</text>
-        <input class="field-input" type="digit" placeholder="仅数字，大于 0" value="{{noteForm.actualTicketPrice}}" data-field="actualTicketPrice" bindinput="handleNoteInput" />
+        <input class="field-input" type="digit" inputmode="decimal" placeholder="大于 0，最多 2 位小数" value="{{noteForm.actualTicketPrice}}" data-field="actualTicketPrice" bindinput="handleNoteInput" />
       </view>
       <view class="form-field">
         <text class="field-label">观演感受</text>

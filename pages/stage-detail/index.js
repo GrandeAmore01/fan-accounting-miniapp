@@ -43,6 +43,7 @@ Page({
       this.setData({
         loading: false,
         detail,
+        editingNote: detail.isLighted ? this.data.editingNote : false,
         noteForm: {
           seat: detail.note.seat || '',
           companions: detail.note.companions || '',
@@ -61,6 +62,10 @@ Page({
   },
 
   handleToggleNoteEdit() {
+    if (!this.data.detail || !this.data.detail.isLighted) {
+      wx.showToast({ title: '请先点亮该场次', icon: 'none' });
+      return;
+    }
     this.setData({
       editingNote: !this.data.editingNote
     });
@@ -70,14 +75,33 @@ Page({
     const { field } = event.currentTarget.dataset;
     let value = event.detail.value;
     if (field === 'actualTicketPrice') {
-      value = String(value || '').replace(/[^\d]/g, '');
+      value = this.sanitizeActualTicketPriceInput(
+        value,
+        this.data.noteForm.actualTicketPrice
+      );
     }
     this.setData({
       [`noteForm.${field}`]: value
     });
   },
 
+  sanitizeActualTicketPriceInput(value, previousValue = '') {
+    const nextValue = String(value || '');
+    const previous = String(previousValue || '');
+    if (!nextValue) {
+      return '';
+    }
+    if (!/^\d*(\.\d{0,2})?$/.test(nextValue)) {
+      return previous;
+    }
+    return nextValue;
+  },
+
   async handleSaveNote() {
+    if (!this.data.detail || !this.data.detail.isLighted) {
+      wx.showToast({ title: '请先点亮该场次', icon: 'none' });
+      return;
+    }
     const { noteForm, stageId } = this.data;
     const result = await stageService.saveStageNote(stageId, noteForm);
     if (!result.valid) {
