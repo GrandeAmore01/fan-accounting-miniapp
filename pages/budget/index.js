@@ -5,6 +5,14 @@ const budgetTypes = [
   { id: 'year', name: '年度预算' }
 ];
 const chartColorClasses = ['green', 'gold', 'orange', 'blue', 'purple', 'rose'];
+const chartColors = {
+  green: '#6fa87b',
+  gold: '#d8b12e',
+  orange: '#d58a45',
+  blue: '#6f9fc2',
+  purple: '#9d8ac4',
+  rose: '#c77d86'
+};
 
 function formatMoney(value) {
   return Number(value || 0).toFixed(2);
@@ -12,6 +20,17 @@ function formatMoney(value) {
 
 function getMainCategoryName(categoryName = '') {
   return categoryName.split(' / ')[0] || categoryName;
+}
+
+function formatPeriodLabel(selectedType, period = '') {
+  if (selectedType === 'year') {
+    return period ? `${period}年度预算` : '年度预算';
+  }
+  const [year, month] = String(period || '').split('-');
+  if (year && month) {
+    return `${year}年${month}月预算`;
+  }
+  return '月度预算';
 }
 
 function buildProgressView(progress) {
@@ -90,20 +109,30 @@ function appendComparisonText(analysis, comparison, selectedType) {
 }
 
 function buildCategoryBudgetViews(categoryBudgetStats) {
-  return categoryBudgetStats.map((item) => {
-    const safePercent = item.isUnset ? 0 : Math.min(item.percent, 100);
-    const statusLevel = item.isUnset ? 'unset' : item.isOverBudget ? 'danger' : item.percent >= 80 ? 'warn' : 'ok';
-    return {
-      ...item,
-      budgetAmountText: item.isUnset ? '未设置' : `￥${formatMoney(item.budgetAmount)}`,
-      usedAmountText: `￥${formatMoney(item.usedAmount)}`,
-      remainingAmountText: item.isUnset ? '未设置' : `￥${formatMoney(item.remainingAmount)}`,
-      percentText: item.isUnset ? '--' : `${item.percent}%`,
-      safePercent,
-      statusLevel,
-      fillClass: `${statusLevel}-fill`
-    };
-  });
+  return categoryBudgetStats
+    .map((item) => {
+      const safePercent = item.isUnset ? 0 : Math.min(item.percent, 100);
+      const statusLevel = item.isUnset ? 'unset' : item.isOverBudget ? 'danger' : item.percent >= 80 ? 'warn' : 'ok';
+      return {
+        ...item,
+        budgetAmountText: item.isUnset ? '未设置' : `￥${formatMoney(item.budgetAmount)}`,
+        usedAmountText: `￥${formatMoney(item.usedAmount)}`,
+        remainingAmountText: item.isUnset ? '未设置' : `￥${formatMoney(item.remainingAmount)}`,
+        percentText: item.isUnset ? '--' : `${item.percent}%`,
+        safePercent,
+        statusLevel,
+        fillClass: `${statusLevel}-fill`
+      };
+    })
+    .sort((a, b) => {
+      if (a.isUnset !== b.isUnset) {
+        return a.isUnset ? 1 : -1;
+      }
+      if (a.percent !== b.percent) {
+        return b.percent - a.percent;
+      }
+      return b.usedAmount - a.usedAmount;
+    });
 }
 
 function buildWarningViews(warnings) {
@@ -132,6 +161,7 @@ function buildInsightView(insight) {
       level: '需关注',
       mainReason: '暂无预算分析数据。',
       suggestion: '记录更多消费后会生成预算建议。',
+      suggestionText: '记录更多消费后会生成预算建议。',
       overspendReason: '暂无风险原因。',
       scoreClass: 'attention-health',
       riskCategories: [],
@@ -150,6 +180,7 @@ function buildInsightView(insight) {
     ...insight,
     scoreText: `${insight.score}分`,
     scoreClass,
+    suggestionText: `${insight.suggestion}${insight.overspendReason ? ` ${insight.overspendReason}` : ''}`,
     riskCategories: (insight.riskCategories || []).map((item) => ({
       ...item,
       usedAmountText: `￥${formatMoney(item.usedAmount)}`,
@@ -164,12 +195,40 @@ function buildInsightView(insight) {
   };
 }
 
+function getCategoryBudgetTotal(items = []) {
+  return items.reduce((sum, item) => sum + Number(item.inputValue || 0), 0);
+}
+
+function buildCategoryBudgetTotalView(items = []) {
+  const total = getCategoryBudgetTotal(items);
+  return {
+    amount: total,
+    amountText: `￥${formatMoney(total)}`
+  };
+}
+
+function buildPieGradient(categoryStats) {
+  if (!categoryStats.length) {
+    return 'background: #eee9dc;';
+  }
+  let start = 0;
+  const segments = categoryStats.map((item, index) => {
+    const end = index === categoryStats.length - 1 ? 100 : start + Number(item.percent || 0);
+    const color = chartColors[item.colorClass] || chartColors.green;
+    const segment = `${color} ${start}% ${end}%`;
+    start = end;
+    return segment;
+  });
+  return `background: conic-gradient(${segments.join(', ')});`;
+}
+
 Page({
   data: {
     budgetTypes,
     budgetTypeIndex: 0,
     selectedType: 'month',
     selectedPeriod: '',
+    periodLabel: '月度预算',
     formVisible: false,
     savingBudget: false,
     formData: {
@@ -177,6 +236,10 @@ Page({
       thresholdPercent: 80,
       period: '',
       categoryBudgets: {}
+    },
+    categoryBudgetTotal: {
+      amount: 0,
+      amountText: '￥0.00'
     },
     progress: {
       budget: {
@@ -252,7 +315,10 @@ Page({
       barPercent: item.amount > 0 ? Math.max(10, Math.min(72, Math.round((item.percent || 0) * 0.72))) : 0,
       amountText: `￥${formatMoney(item.amount)}`
     }));
+    const periodLabel = formatPeriodLabel(this.data.selectedType, dashboard.progress.budget.period || this.data.selectedPeriod);
+    const categoryBudgetStats = buildCategoryBudgetViews(dashboard.categoryBudgetStats || []);
     this.setData({
+      periodLabel,
       progress: dashboard.progress,
       progressView: buildProgressView(dashboard.progress),
       analysis: appendComparisonText(
@@ -263,7 +329,8 @@ Page({
       warnings: buildWarningViews(dashboard.warnings || []),
       insight: buildInsightView(dashboard.insight),
       categoryStats,
-      categoryBudgetStats: buildCategoryBudgetViews(dashboard.categoryBudgetStats || []),
+      pieChartStyle: buildPieGradient(categoryStats),
+      categoryBudgetStats,
       budgetHistory: buildHistoryViews(dashboard.budgetHistory || []),
       monthTrend
     });
@@ -329,6 +396,10 @@ Page({
         ...item,
         inputValue: categoryBudgets[item.category] ? String(categoryBudgets[item.category]) : ''
       }))
+    }, () => {
+      this.setData({
+        categoryBudgetTotal: buildCategoryBudgetTotalView(this.data.categoryBudgetFormItems)
+      });
     });
   },
 
@@ -355,6 +426,30 @@ Page({
     const index = Number(event.currentTarget.dataset.index);
     this.setData({
       [`categoryBudgetFormItems[${index}].inputValue`]: event.detail.value
+    }, () => {
+      this.setData({
+        categoryBudgetTotal: buildCategoryBudgetTotalView(this.data.categoryBudgetFormItems)
+      });
+    });
+  },
+
+  handleUseCategoryTotal() {
+    const total = getCategoryBudgetTotal(this.data.categoryBudgetFormItems);
+    if (total <= 0) {
+      wx.showToast({
+        title: '请先填写分类预算',
+        icon: 'none'
+      });
+      return;
+    }
+    this.setData({
+      'formData.amount': String(total),
+      categoryBudgetTotal: buildCategoryBudgetTotalView(this.data.categoryBudgetFormItems)
+    }, () => {
+      wx.showToast({
+        title: '已设为总预算',
+        icon: 'none'
+      });
     });
   },
 

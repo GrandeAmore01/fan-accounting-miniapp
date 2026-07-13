@@ -5,14 +5,44 @@ const apiService = require('./apiService');
 
 const USER_ID = config.userId || 'local-user';
 const DEFAULT_THRESHOLD = 0.8;
+const BUDGET_TARGETS = [
+  { id: 'meet', name: '见面' },
+  { id: 'collection', name: '藏品' },
+  { id: 'transport', name: '交通' },
+  { id: 'accommodation', name: '住宿' },
+  { id: 'other', name: '其他' }
+];
+const LEGACY_CATEGORY_MAP = {
+  album: 'collection',
+  goods: 'collection',
+  magazine: 'collection',
+  card: 'collection',
+  endorsement: 'collection',
+  business: 'collection',
+  traffic: 'transport',
+  ticket: 'meet',
+  support: 'meet',
+  other_collection: 'collection'
+};
 
 function getBudgetTargets() {
-  return expenseService.expenseCategories.map((item) => ({
+  return BUDGET_TARGETS.map((item) => ({
     id: item.id,
     name: item.name,
     category: item.id,
     subType: ''
   }));
+}
+
+function getBudgetTarget(targetId) {
+  return BUDGET_TARGETS.find((item) => item.id === targetId) || BUDGET_TARGETS[BUDGET_TARGETS.length - 1];
+}
+
+function normalizeBudgetCategory(category) {
+  if (BUDGET_TARGETS.some((item) => item.id === category)) {
+    return category;
+  }
+  return LEGACY_CATEGORY_MAP[category] || 'other';
 }
 
 function getCurrentMonth() {
@@ -63,16 +93,18 @@ function normalizeBudget(budget) {
 }
 
 function normalizeCategoryBudgets(categoryBudgets = {}) {
-  return getBudgetTargets().reduce((result, target) => {
-    let amount = Number(categoryBudgets[target.id] || 0);
-    if (target.id === 'meet') {
-      amount += Object.keys(categoryBudgets)
-        .filter((key) => key.indexOf('meet_') === 0)
-        .reduce((sum, key) => sum + Number(categoryBudgets[key] || 0), 0);
-    }
-    result[target.id] = amount > 0 ? amount : 0;
-    return result;
+  const result = getBudgetTargets().reduce((map, target) => {
+    map[target.id] = 0;
+    return map;
   }, {});
+  Object.keys(categoryBudgets || {}).forEach((key) => {
+    const targetId = key.indexOf('meet_') === 0 ? 'meet' : normalizeBudgetCategory(key);
+    result[targetId] += Number(categoryBudgets[key] || 0);
+  });
+  Object.keys(result).forEach((key) => {
+    result[key] = result[key] > 0 ? result[key] : 0;
+  });
+  return result;
 }
 
 function validateBudget(budget) {
@@ -223,16 +255,18 @@ function getCategoryStats(budgetType = 'month', period = getDefaultPeriod(budget
   const totalAmount = periodExpenses.reduce((sum, item) => sum + Number(item.includedAmount || 0), 0);
   const map = {};
   periodExpenses.forEach((item) => {
-    if (!map[item.category]) {
-      map[item.category] = {
-        category: item.category,
-        categoryName: item.categoryName,
+    const targetId = normalizeBudgetCategory(item.category);
+    const target = getBudgetTarget(targetId);
+    if (!map[targetId]) {
+      map[targetId] = {
+        category: targetId,
+        categoryName: target.name,
         amount: 0,
         count: 0
       };
     }
-    map[item.category].amount += Number(item.includedAmount || 0);
-    map[item.category].count += 1;
+    map[targetId].amount += Number(item.includedAmount || 0);
+    map[targetId].count += 1;
   });
   return Object.keys(map)
     .map((key) => ({
@@ -248,7 +282,7 @@ function getCategoryBudgetStats(budgetType = 'month', period = getDefaultPeriod(
   const expenseMap = {};
 
   periodExpenses.forEach((item) => {
-    const targetId = item.category;
+    const targetId = normalizeBudgetCategory(item.category);
     expenseMap[targetId] = expenseMap[targetId] || {
       amount: 0,
       count: 0

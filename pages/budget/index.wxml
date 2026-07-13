@@ -1,6 +1,6 @@
 <view class="page">
   <text class="page-title">预算统计</text>
-  <text class="page-subtitle">设置月度或年度预算，按当前周期统计计入总消费的记录。</text>
+  <text class="page-subtitle">按见面、藏品、交通、住宿、其他五类归集支出，查看当前周期预算使用情况。</text>
 
   <view class="card selector-card">
     <picker mode="selector" range="{{budgetTypes}}" range-key="name" value="{{budgetTypeIndex}}" bindchange="handleBudgetTypeChange">
@@ -31,7 +31,7 @@
         <text class="ring-label">使用率</text>
       </view>
       <view class="budget-info">
-        <text class="budget-info-title">{{selectedType === 'month' ? '本月预算' : '年度预算'}}</text>
+        <text class="budget-info-title">{{periodLabel}}</text>
         <text class="budget-info-desc">{{progressView.statusText}}</text>
       </view>
     </view>
@@ -48,61 +48,38 @@
     <text class="status-text {{progressView.statusLevel}}-text">{{progressView.statusText}}</text>
   </view>
 
-  <view class="card analysis-card">
-    <text class="card-title">本期消费分析</text>
-    <text class="analysis-title">{{analysis.title}}</text>
-    <text class="analysis-desc">{{analysis.desc}}</text>
-  </view>
-
   <view class="card health-card {{insight.scoreClass}}">
     <view class="row">
       <view>
-        <text class="card-title">预算健康分析</text>
+        <text class="card-title">预算诊断</text>
         <text class="health-level">{{insight.level}}</text>
       </view>
       <view class="health-score {{insight.scoreClass}}">
         <text>{{insight.scoreText}}</text>
       </view>
     </view>
-    <text class="analysis-desc">{{insight.mainReason}}</text>
-    <text class="analysis-desc">{{insight.overspendReason}}</text>
-    <text class="suggestion-text">{{insight.suggestion}}</text>
+    <view class="diagnostic-block">
+      <text class="section-title">消费概览</text>
+      <text class="analysis-title">{{analysis.title}}</text>
+      <text class="analysis-desc">{{analysis.desc}}</text>
+    </view>
+    <text class="suggestion-text">{{insight.suggestionText}}</text>
 
-    <view class="risk-section" wx:if="{{insight.riskCategories.length > 0}}">
-      <text class="section-title">分类风险排行</text>
-      <view class="risk-item" wx:for="{{insight.riskCategories}}" wx:key="category">
-        <view class="row">
-          <text class="stat-name">{{item.categoryName}}</text>
-          <text class="category-budget-percent">{{item.percent}}%</text>
-        </view>
-        <text class="risk-meta">已用 {{item.usedAmountText}} / 预算 {{item.budgetAmountText}}</text>
-        <view class="mini-track">
-          <view class="mini-fill {{item.fillClass}}" style="width: {{item.safePercent}}%;"></view>
-        </view>
+    <view class="risk-section">
+      <text class="section-title">预算预警</text>
+      <view wx:if="{{warnings.length === 0}}" class="empty compact-empty">当前周期暂无预算预警。</view>
+      <view class="warning-item {{item.className}}" wx:for="{{warnings}}" wx:key="id">
+        <text class="warning-title">{{item.title}}</text>
+        <text class="warning-desc">{{item.desc}}</text>
       </view>
     </view>
 
-    <view class="risk-section" wx:if="{{insight.unsetCategoryHints.length > 0}}">
-      <text class="section-title">未设置分类预算提醒</text>
-      <view class="unset-hint" wx:for="{{insight.unsetCategoryHints}}" wx:key="category">
-        {{item.categoryName}}已有消费 {{item.usedAmountText}}，建议补充分类预算。
-      </view>
-    </view>
-  </view>
-
-  <view class="card warning-card">
-    <text class="card-title">预算预警记录</text>
-    <view wx:if="{{warnings.length === 0}}" class="empty">当前周期暂无预算预警。</view>
-    <view class="warning-item {{item.className}}" wx:for="{{warnings}}" wx:key="id">
-      <text class="warning-title">{{item.title}}</text>
-      <text class="warning-desc">{{item.desc}}</text>
-    </view>
   </view>
 
   <view class="card">
     <view class="row">
-      <text class="card-title">分类预算</text>
-      <text class="muted">按大类分别控制支出</text>
+      <text class="card-title">分类预算排行</text>
+      <text class="muted">按使用率排序</text>
     </view>
     <view class="category-budget-item {{item.statusLevel}}-budget" wx:for="{{categoryBudgetStats}}" wx:key="category">
       <view class="row">
@@ -118,35 +95,38 @@
         <view class="mini-fill {{item.fillClass}}" style="width: {{item.safePercent}}%;"></view>
       </view>
     </view>
+    <view class="risk-section" wx:if="{{insight.unsetCategoryHints.length > 0}}">
+      <text class="section-title">未设置分类预算提醒</text>
+      <view class="unset-hint" wx:for="{{insight.unsetCategoryHints}}" wx:key="category">
+        {{item.categoryName}}已有消费 {{item.usedAmountText}}，建议补充分类预算。
+      </view>
+    </view>
   </view>
 
   <view class="card">
-    <text class="card-title">分类占比图</text>
+    <text class="card-title">消费分类占比图</text>
     <view wx:if="{{categoryStats.length === 0}}" class="empty">当前周期暂无可统计消费。</view>
-    <view class="share-chart" wx:if="{{categoryStats.length > 0}}">
-      <view
-        class="share-segment share-{{item.colorClass}}"
-        wx:for="{{categoryStats}}"
-        wx:key="category"
-        style="width: {{item.shareWidth}}%;"
-      ></view>
-    </view>
-    <view class="stat-item {{item.isTop ? 'top-stat-item' : ''}}" wx:for="{{categoryStats}}" wx:key="category">
-      <view class="row">
-        <view class="legend-name">
-          <text class="legend-dot share-{{item.colorClass}}"></text>
-          <text class="stat-name">{{item.categoryName}}</text>
+    <view class="pie-layout" wx:if="{{categoryStats.length > 0}}">
+      <view class="pie-chart" style="{{pieChartStyle}}">
+        <view class="pie-hole">
+          <text class="pie-total">{{categoryStats.length}}</text>
+          <text class="pie-label">分类</text>
         </view>
-        <text class="muted">{{item.amountText}} · {{item.count}} 笔 · {{item.percent}}%</text>
       </view>
-      <view class="mini-track">
-        <view class="mini-fill share-{{item.colorClass}}" style="width: {{item.percent}}%;"></view>
+      <view class="pie-legend">
+        <view class="pie-legend-item" wx:for="{{categoryStats}}" wx:key="category">
+          <view class="legend-name">
+            <text class="legend-dot share-{{item.colorClass}}"></text>
+            <text class="stat-name">{{item.categoryName}}</text>
+          </view>
+          <text class="muted">{{item.amountText}} · {{item.count}} 笔 · {{item.percent}}%</text>
+        </view>
       </view>
     </view>
   </view>
 
   <view class="card">
-    <text class="card-title">月度趋势图</text>
+    <text class="card-title">消费月度趋势图</text>
     <view wx:if="{{monthTrend.length === 0}}" class="empty">暂无月度消费数据。</view>
     <view class="trend-chart" wx:if="{{monthTrend.length > 0}}">
       <view class="trend-column" wx:for="{{monthTrend}}" wx:key="month">
@@ -205,7 +185,11 @@
       </view>
 
       <view class="form-section">
-        <text class="section-title">分类预算（可选）</text>
+        <view class="row form-section-header">
+          <text class="section-title">分类预算（可选）</text>
+          <text class="muted">合计：{{categoryBudgetTotal.amountText}}</text>
+        </view>
+        <button class="sync-budget-button" bindtap="handleUseCategoryTotal">一键设为总预算</button>
         <view class="category-budget-form-item" wx:for="{{categoryBudgetFormItems}}" wx:key="category">
           <text class="field-label">{{item.categoryName}}</text>
           <input
