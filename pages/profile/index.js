@@ -15,6 +15,9 @@ function formatSyncTime(date = new Date()) {
   return `${hours}:${minutes}`;
 }
 
+const PROFILE_SYNC_INTERVAL = 30 * 1000;
+let lastProfileSyncAt = 0;
+
 Page({
   data: {
     profile: { nickname: '微信用户', avatarFileId: '', avatarUrl: '', loginStatus: false },
@@ -44,37 +47,67 @@ Page({
   },
 
   onShow() {
-    this.refreshPage();
+    const now = Date.now();
+    if (lastProfileSyncAt && now - lastProfileSyncAt < PROFILE_SYNC_INTERVAL) {
+      this.showCachedProfile();
+      return;
+    }
+    this.refreshPage({ silent: Boolean(lastProfileSyncAt) });
   },
 
-  async refreshPage() {
+  showCachedProfile() {
     const localSummary = storageService.getLocalDataSummary();
     this.setData({
-      loading: true,
-      profile: localSummary.profile,
-      sync: {
+      loading: false,
+      profile: {
+        ...localSummary.profile,
+        nickname: localSummary.profile.displayName || localSummary.profile.nickname || '微信用户'
+      }
+    });
+  },
+
+  async refreshPage(options = {}) {
+    const silent = Boolean(options.silent);
+    const localSummary = storageService.getLocalDataSummary();
+    const nextData = {
+      loading: !silent,
+      profile: {
+        ...localSummary.profile,
+        nickname: localSummary.profile.displayName || localSummary.profile.nickname || '微信用户'
+      }
+    };
+    if (!silent) {
+      nextData.sync = {
         ...this.data.sync,
         state: 'syncing',
         label: '同步中',
         message: '正在读取你的云端数据'
-      }
-    });
+      };
+    }
+    this.setData(nextData);
 
     try {
       const [dashboard, collections, , cloudProfile] = await Promise.all([
         budgetService.getBudgetDashboardAsync('month', budgetService.getCurrentMonth()),
         collectionService.listCollections(),
         stageService.ensureStagesLoaded(),
-        profileService.getProfile().then(async (profile) => ({
-          ...profile,
-          avatarUrl: await profileService.getTempFileUrl(profile.avatarFileId).catch(() => '')
-        }))
+        profileService.getProfile().then(async (profile) => {
+          const cachedAvatarUrl = storageService.getLocalDataSummary().profile.avatarUrl || '';
+          const avatarUrl = await profileService.getTempFileUrl(profile.avatarFileId)
+            .then((url) => {
+              profileService.cacheAvatarUrl(profile.avatarFileId, url);
+              return url;
+            })
+            .catch(() => cachedAvatarUrl);
+          return { ...profile, avatarUrl };
+        })
       ]);
       const expenseSummary = expenseService.getExpenseSummary();
       const stageStats = stageService.getStageStats();
       const progress = dashboard.progress;
       const hasBudget = Number(progress.budget.amount || 0) > 0;
       const percent = hasBudget ? Math.max(Number(progress.percent || 0), 0) : 0;
+      lastProfileSyncAt = Date.now();
 
       this.setData({
         loading: false,
@@ -113,7 +146,7 @@ Page({
       const cached = storageService.getLocalDataSummary();
       const cachedExpenses = storageService.getCollection(null, 'expenses');
       const cachedAvatarFileId = cached.profile.avatarFileId || '';
-      const cachedAvatarUrl = await profileService.getTempFileUrl(cachedAvatarFileId).catch(() => '');
+      const cachedAvatarUrl = cached.profile.avatarUrl || '';
       this.setData({
         loading: false,
         profile: {
@@ -150,17 +183,34 @@ Page({
     const filePath = event.detail.avatarUrl;
     if (!filePath) return;
 
+    const oldProfile = { ...this.data.profile };
     const oldAvatarFileId = this.data.profile.avatarFileId || '';
     let newAvatarFileId = '';
-    this.setData({ savingProfile: true });
+    this.setData({
+      savingProfile: true,
+      sync: {
+        ...this.data.sync,
+        state: 'syncing',
+        label: '同步中',
+        message: '正在上传头像'
+      }
+    });
     wx.showLoading({ title: '正在上传头像' });
     try {
       newAvatarFileId = await profileService.uploadAvatar(filePath);
       const saved = await profileService.saveProfile({ avatarFileId: newAvatarFileId });
       const avatarUrl = await profileService.getTempFileUrl(saved.avatarFileId);
+      profileService.cacheAvatarUrl(saved.avatarFileId, avatarUrl);
+      lastProfileSyncAt = Date.now();
       this.setData({
         'profile.avatarFileId': saved.avatarFileId,
-        'profile.avatarUrl': avatarUrl
+        'profile.avatarUrl': avatarUrl,
+        sync: {
+          state: 'synced',
+          label: '已同步',
+          message: '头像已同步到云端',
+          lastTime: formatSyncTime()
+        }
       });
       if (oldAvatarFileId && oldAvatarFileId !== saved.avatarFileId) {
         profileService.deleteFile(oldAvatarFileId);
@@ -168,7 +218,19 @@ Page({
       wx.showToast({ title: '头像已更新', icon: 'success' });
     } catch (error) {
       if (newAvatarFileId) profileService.deleteFile(newAvatarFileId);
-      wx.showToast({ title: error.message || '头像更新失败', icon: 'none' });
+      this.setData({
+        profile: oldProfile,
+        sync: {
+          ...this.data.sync,
+          state: 'offline',
+          label: '暂时离线',
+          message: '上传失败，请重试'
+        }
+      });
+      const message = error.message && error.message.indexOf('2MB') >= 0
+        ? error.message
+        : '上传失败，请重试';
+      wx.showToast({ title: message, icon: 'none' });
     } finally {
       wx.hideLoading();
       this.setData({ savingProfile: false });
@@ -199,6 +261,7 @@ Page({
         wx.showLoading({ title: '正在保存' });
         try {
           const saved = await profileService.saveProfile({ displayName });
+          lastProfileSyncAt = Date.now();
           this.setData({ 'profile.nickname': saved.displayName });
           wx.showToast({ title: '昵称已更新', icon: 'success' });
         } catch (error) {
@@ -235,6 +298,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return;
         storageService.resetUserData();
+        lastProfileSyncAt = 0;
         wx.showToast({ title: '缓存已清理', icon: 'success' });
         this.refreshPage();
       }
