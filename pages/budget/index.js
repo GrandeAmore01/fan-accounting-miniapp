@@ -313,6 +313,7 @@ Page({
       ...item,
       shortMonth: item.month.replace('-', '/').slice(2),
       barPercent: item.amount > 0 ? Math.max(10, Math.min(72, Math.round((item.percent || 0) * 0.72))) : 0,
+      listPercent: item.amount > 0 ? Math.max(12, Math.min(88, Math.round((item.percent || 0) * 0.88))) : 0,
       amountText: `￥${formatMoney(item.amount)}`
     }));
     const periodLabel = formatPeriodLabel(this.data.selectedType, dashboard.progress.budget.period || this.data.selectedPeriod);

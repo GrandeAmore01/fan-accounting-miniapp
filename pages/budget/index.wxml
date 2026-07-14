@@ -139,7 +139,7 @@
     <view class="trend-item" wx:for="{{monthTrend}}" wx:key="month">
       <text class="trend-label">{{item.month}}</text>
       <view class="trend-track">
-        <view class="trend-fill" style="width: {{item.percent}}%;"></view>
+        <view class="trend-fill" style="width: {{item.listPercent}}%;"></view>
       </view>
       <text class="trend-amount">{{item.amountText}}</text>
     </view>
