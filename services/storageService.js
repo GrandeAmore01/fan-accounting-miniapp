@@ -12,6 +12,7 @@ const DEFAULT_USER_DATA = {
     nickname: '本地用户',
     displayName: '微信用户',
     avatarFileId: '',
+    avatarUrl: '',
     loginStatus: false
   }
 };
