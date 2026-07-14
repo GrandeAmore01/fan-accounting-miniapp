@@ -414,7 +414,19 @@ function getBudgetInsight(budgetType = 'month', period = getDefaultPeriod(budget
     historyWithActual.length > 0
       ? historyWithActual.reduce((sum, item) => sum + item.actualAmount, 0) / historyWithActual.length
       : 0;
-  const suggestedBudget = Math.ceil((averageActual * 1.1) / 10) * 10;
+  const currentAmount = Number(progress.totalAmount || 0);
+  const currentBudget = Number(progress.budget.amount || 0);
+  const remainingAmount = Math.max(0, currentBudget - currentAmount);
+  const periodName = budgetType === 'year' ? '下一年度' : '下月';
+  const historyBase = averageActual > 0 ? averageActual * 1.1 : 0;
+  let currentBase = currentAmount > 0 ? currentAmount * 1.05 : 0;
+  if (progress.isOverBudget) {
+    currentBase = currentAmount * 1.1;
+  } else if (progress.isOverThreshold) {
+    currentBase = currentAmount * 1.08;
+  }
+  const suggestedBase = Math.max(historyBase, currentBase);
+  const suggestedBudget = suggestedBase > 0 ? Math.ceil(suggestedBase / 10) * 10 : 0;
   const topCategory = categoryStats[0];
   const riskCategories = categoryBudgetStats
     .filter((item) => !item.isUnset && item.percent > 0)
@@ -470,19 +482,36 @@ function getBudgetInsight(budgetType = 'month', period = getDefaultPeriod(budget
   } else if (topCategory) {
     mainReason = `本期主要支出来自${topCategory.categoryName}，占比 ${topCategory.percent}%。`;
   }
-  const suggestion = suggestedBudget > 0
-    ? `参考最近消费情况，建议下期预算可设置为 ￥${suggestedBudget.toFixed(2)} 左右。`
-    : '暂无足够历史数据，建议先完成 1-2 个周期记录后再参考预算建议。';
-  let overspendReason = '当前预算风险较低，可以继续保持记录习惯。';
+  let suggestion = '暂无足够历史数据，建议先完成 1-2 个周期记录后再参考预算建议。';
+  if (!currentBudget && suggestedBudget > 0) {
+    suggestion = `当前还未设置总预算，可先按本期已记录消费和历史均值，将${periodName}预算设为 ￥${suggestedBudget.toFixed(2)} 左右。`;
+  } else if (progress.isOverBudget && suggestedBudget > 0) {
+    suggestion = `本期已用 ￥${currentAmount.toFixed(2)}，已经超过当前预算，${periodName}预算建议至少参考 ￥${suggestedBudget.toFixed(2)}，同时先减少高风险分类支出。`;
+  } else if (progress.isOverThreshold && suggestedBudget > 0) {
+    suggestion = `本期已使用 ${progress.percent}%，剩余预算约 ￥${remainingAmount.toFixed(2)}，建议先控制新增支出；${periodName}预算可参考 ￥${suggestedBudget.toFixed(2)}。`;
+  } else if (currentBudget && suggestedBudget > 0) {
+    suggestion = `当前剩余预算约 ￥${remainingAmount.toFixed(2)}，预算压力相对可控，建议继续按五大类记录；${periodName}预算可参考 ￥${suggestedBudget.toFixed(2)}。`;
+  } else if (currentBudget) {
+    suggestion = `当前周期还没有明显消费数据，建议先保持 ￥${currentBudget.toFixed(2)} 的预算设置，并继续记录后再调整${periodName}预算。`;
+  }
+  let overspendReason = '分类预算暂未出现明显异常，可继续观察消费节奏。';
   if (overBudgetCategories.length) {
-    overspendReason = `分类预算风险较高，请优先处理${overBudgetCategories
-      .map((item) => item.categoryName)
+    overspendReason = `优先处理${overBudgetCategories
+      .map((item) => `${item.categoryName}${item.percent}%`)
       .slice(0, 3)
-      .join('、')}等超支分类。`;
+      .join('、')}等超支分类，避免总预算继续被拉高。`;
   } else if (progress.isOverBudget && topCategory) {
-    overspendReason = `当前总预算使用率为 ${progress.percent}%，已超过 100%，请优先压缩${topCategory.categoryName}相关支出。`;
-  } else if (progress.isOverThreshold) {
-    overspendReason = '当前已接近预算上限，建议优先控制使用率最高的分类。';
+    overspendReason = `当前总预算使用率为 ${progress.percent}%，已超过 100%，建议先压缩${topCategory.categoryName}相关支出。`;
+  } else if (progress.isOverThreshold && riskCategories.length) {
+    overspendReason = `当前已接近预算上限，建议重点关注${riskCategories
+      .map((item) => item.categoryName)
+      .slice(0, 2)
+      .join('、')}的后续支出。`;
+  } else if (unsetCategoryHints.length) {
+    overspendReason = `${unsetCategoryHints
+      .map((item) => item.categoryName)
+      .slice(0, 2)
+      .join('、')}已有支出但未设置分类预算，建议补充分项预算便于预警。`;
   }
 
   return {

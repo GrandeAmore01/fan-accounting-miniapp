@@ -212,6 +212,14 @@
   line-height: 1.35;
 }
 
+.field-hint {
+  display: block;
+  margin-top: 8rpx;
+  color: #8b7a55;
+  font-size: 22rpx;
+  line-height: 1.35;
+}
+
 .field-warning-text {
   display: block;
   margin-top: 8rpx;

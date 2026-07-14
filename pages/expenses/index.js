@@ -260,6 +260,7 @@ Page({
     quickRemarkTags: [],
     selectedRemarkTags: [],
     formRemarkText: '',
+    remarkLimitHint: `备注最多 ${MAX_REMARK_LENGTH} 字，超过后将不再继续输入`,
     customRemarkTag: '',
     deleteConfirmVisible: false,
     deleteSubmitting: false,
@@ -1000,6 +1001,9 @@ Page({
     const field = event.currentTarget.dataset.field;
     if (field === 'remark') {
       const composedRemark = composeRemark(this.data.selectedRemarkTags, event.detail.value);
+      if (composedRemark.length >= MAX_REMARK_LENGTH) {
+        this.showInputLimitToast(`备注最多 ${MAX_REMARK_LENGTH} 字`);
+      }
       const safeRemark = this.sanitizeFormInput('remark', composedRemark);
       const remarkParts = parseRemarkParts(safeRemark);
       const formData = {
