@@ -26,6 +26,13 @@ function normalizeImages(images = []) {
   return [];
 }
 
+function getRemarkPlainText(remark = '') {
+  return String(remark || '')
+    .replace(/#[^\s#]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function calculateBaseAmount(expense) {
   const amount = toNumber(expense.amount);
   const quantity = toNumber(expense.quantity || 1);
@@ -145,7 +152,7 @@ function validateExpense(expense) {
   if (String(expense.itemName || '').length > MAX_NAME_LENGTH) {
     return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
   }
-  if (String(expense.remark || '').length > MAX_REMARK_LENGTH) {
+  if (getRemarkPlainText(expense.remark).length > MAX_REMARK_LENGTH) {
     return { valid: false, message: `备注上限为 ${MAX_REMARK_LENGTH} 个字` };
   }
   if (
