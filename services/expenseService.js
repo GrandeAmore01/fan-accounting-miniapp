@@ -100,6 +100,13 @@ function getCategoryName(categoryId, subTypeId) {
   return subType ? `${mainType.name} / ${subType.name}` : mainType.name;
 }
 
+function getRemarkPlainText(remark = '') {
+  return String(remark || '')
+    .replace(/#[^\s#]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function toNumber(value) {
   return Number(value || 0);
 }
@@ -261,7 +268,7 @@ function validateExpense(expense) {
   if (nextExpense.itemName.length > MAX_NAME_LENGTH) {
     return { valid: false, message: `项目名称上限为 ${MAX_NAME_LENGTH} 个字` };
   }
-  if (nextExpense.remark.length > MAX_REMARK_LENGTH) {
+  if (getRemarkPlainText(nextExpense.remark).length > MAX_REMARK_LENGTH) {
     return { valid: false, message: `备注上限为 ${MAX_REMARK_LENGTH} 个字` };
   }
   if (

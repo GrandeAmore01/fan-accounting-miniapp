@@ -20,8 +20,7 @@ const TEXT_FIELD_LIMITS = {
   itemName: MAX_NAME_LENGTH,
   city: MAX_TEXT_LENGTH,
   location: MAX_TEXT_LENGTH,
-  seat: MAX_TEXT_LENGTH,
-  remark: MAX_REMARK_LENGTH
+  seat: MAX_TEXT_LENGTH
 };
 
 const TEXT_FIELD_NAMES = {
@@ -199,7 +198,12 @@ function parseRemarkParts(remark = '') {
       tags.push(tag);
     }
     return ' ';
-  }).replace(/\s+/g, ' ').trim();
+  })
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   return { tags, text };
 }
 
@@ -209,6 +213,26 @@ function composeRemark(tags = [], text = '') {
     .filter((tag) => tag !== '#')
     .join(' ');
   return [tagText, String(text || '').trim()].filter(Boolean).join(' ').trim();
+}
+
+function getRemarkParagraphs(text = '') {
+  return String(text || '')
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
+function getRemarkDisplayInfo(remark = '', expanded = false) {
+  const text = parseRemarkParts(remark).text;
+  const displayText = text.length > REMARK_PREVIEW_LENGTH && !expanded
+    ? `${text.slice(0, REMARK_PREVIEW_LENGTH)}...`
+    : text;
+  return {
+    text,
+    displayText,
+    paragraphs: getRemarkParagraphs(displayText),
+    canExpand: text.length > REMARK_PREVIEW_LENGTH
+  };
 }
 
 Page({
@@ -260,8 +284,11 @@ Page({
     quickRemarkTags: [],
     selectedRemarkTags: [],
     formRemarkText: '',
-    remarkLimitHint: `备注最多 ${MAX_REMARK_LENGTH} 字，超过后将不再继续输入`,
+    remarkTextLength: 0,
+    maxRemarkLength: MAX_REMARK_LENGTH,
     customRemarkTag: '',
+    customRemarkTagLength: 0,
+    maxCustomTagLength: MAX_CUSTOM_TAG_LENGTH,
     deleteConfirmVisible: false,
     deleteSubmitting: false,
     deleteCurrentExpense: null,
@@ -376,6 +403,7 @@ Page({
 
   decorateExpenseItem(item) {
     const bundleMeta = parseMeetBundleSource(item.expenseSource);
+    const remarkInfo = getRemarkDisplayInfo(item.remark, Boolean(this.data.expandedRemarkMap[item.expenseId]));
     return {
       ...item,
       bundleMeta,
@@ -390,12 +418,9 @@ Page({
         this.data.showActualAmount ? item.totalAmount : item.includedAmount
       ),
       remarkExpanded: Boolean(this.data.expandedRemarkMap[item.expenseId]),
-      remarkCanExpand: parseRemarkParts(item.remark).text.length > REMARK_PREVIEW_LENGTH,
-      remarkDisplayText:
-        parseRemarkParts(item.remark).text.length > REMARK_PREVIEW_LENGTH &&
-        !this.data.expandedRemarkMap[item.expenseId]
-          ? `${parseRemarkParts(item.remark).text.slice(0, REMARK_PREVIEW_LENGTH)}...`
-          : parseRemarkParts(item.remark).text,
+      remarkCanExpand: remarkInfo.canExpand,
+      remarkDisplayText: remarkInfo.displayText,
+      remarkParagraphs: remarkInfo.paragraphs,
       metaText: [item.date, item.city, item.location, item.seat].filter(Boolean).join(' · ')
     };
   },
@@ -978,7 +1003,13 @@ Page({
       formRemarkText: typeof nextState.formRemarkText === 'string'
         ? nextState.formRemarkText
         : parseRemarkParts(nextFormData.remark).text,
+      remarkTextLength: (
+        typeof nextState.formRemarkText === 'string'
+          ? nextState.formRemarkText
+          : parseRemarkParts(nextFormData.remark).text
+      ).length,
       customRemarkTag: typeof nextState.customRemarkTag === 'string' ? nextState.customRemarkTag : '',
+      customRemarkTagLength: (typeof nextState.customRemarkTag === 'string' ? nextState.customRemarkTag : '').length,
       concertStages,
       concertStageIndex,
         priceTiers,
@@ -1000,26 +1031,28 @@ Page({
   handleFormInput(event) {
     const field = event.currentTarget.dataset.field;
     if (field === 'remark') {
-      const composedRemark = composeRemark(this.data.selectedRemarkTags, event.detail.value);
-      if (composedRemark.length >= MAX_REMARK_LENGTH) {
-        this.showInputLimitToast(`备注最多 ${MAX_REMARK_LENGTH} 字`);
-      }
-      const safeRemark = this.sanitizeFormInput('remark', composedRemark);
-      const remarkParts = parseRemarkParts(safeRemark);
+      const rawRemarkText = String(event.detail.value || '');
+      const remarkText = this.limitPlainText(
+        rawRemarkText,
+        this.data.formRemarkText,
+        MAX_REMARK_LENGTH,
+        '备注'
+      );
+      const composedRemark = composeRemark(this.data.selectedRemarkTags, remarkText);
       const formData = {
         ...this.data.formData,
-        remark: safeRemark
+        remark: composedRemark
       };
       this.setData({
         formTouched: true,
         formData,
-        formRemarkText: remarkParts.text,
-        selectedRemarkTags: remarkParts.tags,
+        formRemarkText: remarkText,
+        remarkTextLength: remarkText.length,
         formErrors: this.getFormErrors(formData),
         formWarnings: this.getFormWarnings(formData),
         quickRemarkTags: this.getQuickRemarkTags(formData.category, formData.remark)
       });
-      return undefined;
+      return rawRemarkText.length > MAX_REMARK_LENGTH ? remarkText : undefined;
     }
     const value = this.sanitizeFormInput(field, event.detail.value);
     const formData = {
@@ -1064,7 +1097,8 @@ Page({
       value = this.data.customRemarkTag || '';
     }
     this.setData({
-      customRemarkTag: value
+      customRemarkTag: value,
+      customRemarkTagLength: value.length
     });
     return undefined;
   },
@@ -1080,12 +1114,19 @@ Page({
     }
     const selectedTags = this.data.selectedRemarkTags || [];
     this.updateRemarkTags(selectedTags.includes(tag) ? selectedTags : [...selectedTags, tag], this.data.formRemarkText, {
-      customRemarkTag: ''
+      customRemarkTag: '',
+      customRemarkTagLength: 0
     });
   },
 
   updateRemarkTags(nextTags, remarkText, extraData = {}) {
-    const limitedRemark = this.sanitizeFormInput('remark', composeRemark(nextTags, remarkText));
+    const safeRemarkText = this.limitPlainText(
+      remarkText,
+      this.data.formRemarkText,
+      MAX_REMARK_LENGTH,
+      '备注'
+    );
+    const limitedRemark = composeRemark(nextTags, safeRemarkText);
     const remarkParts = parseRemarkParts(limitedRemark);
     const formData = {
       ...this.data.formData,
@@ -1096,6 +1137,7 @@ Page({
       formData,
       selectedRemarkTags: remarkParts.tags,
       formRemarkText: remarkParts.text,
+      remarkTextLength: remarkParts.text.length,
       formErrors: this.getFormErrors(formData),
       formWarnings: this.getFormWarnings(formData),
       quickRemarkTags: this.getQuickRemarkTags(formData.category, formData.remark),
@@ -1912,14 +1954,12 @@ Page({
       if (item.expenseId !== expenseId) {
         return item;
       }
-      const remark = parseRemarkParts(item.remark).text;
+      const remarkInfo = getRemarkDisplayInfo(item.remark, expanded);
       return {
         ...item,
         remarkExpanded: expanded,
-        remarkDisplayText:
-          remark.length > REMARK_PREVIEW_LENGTH && !expanded
-            ? `${remark.slice(0, REMARK_PREVIEW_LENGTH)}...`
-            : remark
+        remarkDisplayText: remarkInfo.displayText,
+        remarkParagraphs: remarkInfo.paragraphs
       };
     });
     this.setData({
