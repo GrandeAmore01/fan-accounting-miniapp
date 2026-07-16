@@ -128,14 +128,16 @@
   <view class="card">
     <text class="card-title">消费月度趋势图</text>
     <view wx:if="{{monthTrend.length === 0}}" class="empty">暂无月度消费数据。</view>
-    <view class="trend-chart" wx:if="{{monthTrend.length > 0}}">
-      <view class="trend-column" wx:for="{{monthTrend}}" wx:key="month">
-        <view class="trend-column-bar">
-          <view class="trend-column-fill" style="height: {{item.barPercent}}%;"></view>
+    <scroll-view class="trend-chart-scroll" scroll-x wx:if="{{monthTrend.length > 0}}">
+      <view class="trend-chart">
+        <view class="trend-column" wx:for="{{monthTrend}}" wx:key="month">
+          <view class="trend-column-bar">
+            <view class="trend-column-fill" style="height: {{item.barPercent}}%;"></view>
+          </view>
+          <text class="trend-column-label">{{item.shortMonth}}</text>
         </view>
-        <text class="trend-column-label">{{item.shortMonth}}</text>
       </view>
-    </view>
+    </scroll-view>
     <view class="trend-item" wx:for="{{monthTrend}}" wx:key="month">
       <text class="trend-label">{{item.month}}</text>
       <view class="trend-track">
@@ -215,3 +217,4 @@
     </view>
   </view>
 </view>
+
