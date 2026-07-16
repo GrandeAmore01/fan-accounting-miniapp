@@ -69,16 +69,16 @@ Page({
 
   onPullDownRefresh() {
     stageService.invalidateStageCache();
-    this.loadPage().finally(() => {
+    this.loadPage({ resetPage: true }).finally(() => {
       wx.stopPullDownRefresh();
     });
   },
 
-  async loadPage() {
+  async loadPage(options = {}) {
     this.setData({ loading: true });
     try {
       await stageService.ensureStagesLoaded({ refresh: true });
-      this.refreshPage();
+      this.refreshPage({ resetPage: !!options.resetPage });
     } catch (error) {
       wx.showToast({ title: '舞台数据加载失败', icon: 'none' });
     } finally {
@@ -86,7 +86,8 @@ Page({
     }
   },
 
-  refreshPage() {
+  refreshPage(options = {}) {
+    const resetPage = !!options.resetPage;
     const yearOptions = stageService.getYearOptions();
     const stageTypeOptions = stageService.getMeetCategoryOptions();
     const stageTypeIndex = Math.min(this.data.stageTypeIndex, Math.max(stageTypeOptions.length - 1, 0));
@@ -99,7 +100,8 @@ Page({
     });
     this._filteredStages = dashboard.stages || [];
     this._activeStageType = activeStageType;
-    const listView = this.buildStageListView(this._filteredStages, activeStageType, true);
+    // 点亮/取消点亮/新增消费后刷新时保留「加载更多」已展开数量，避免列表缩回前 10 条导致页面跳到底部
+    const listView = this.buildStageListView(this._filteredStages, activeStageType, resetPage);
     this.setData({
       stageTypeOptions,
       stageTypeIndex,
@@ -149,27 +151,27 @@ Page({
   },
   handleKeywordInput(event) {
     this.setData({ keyword: event.detail.value });
-    this.refreshPage();
+    this.refreshPage({ resetPage: true });
   },
 
   handleStageTypeChange(event) {
     this.setData({ stageTypeIndex: Number(event.currentTarget.dataset.index) });
-    this.refreshPage();
+    this.refreshPage({ resetPage: true });
   },
 
   handleYearChange(event) {
     this.setData({ yearIndex: Number(event.detail.value) });
-    this.refreshPage();
+    this.refreshPage({ resetPage: true });
   },
 
   handleStatusChange(event) {
     this.setData({ statusIndex: Number(event.detail.value) });
-    this.refreshPage();
+    this.refreshPage({ resetPage: true });
   },
 
   handleClearFilter() {
     this.setData({ keyword: '', yearIndex: 0, statusIndex: 0 });
-    this.refreshPage();
+    this.refreshPage({ resetPage: true });
   },
 
   handleOpenMeetMemory() {
