@@ -298,7 +298,7 @@
             <input class="form-input" value="{{formData.seat}}" data-field="seat" placeholder="例如：A区 12排 08座" bindinput="handleFormInput" />
           </view>
         </view>
-        <view class="bundle-cost-panel">
+        <view class="bundle-cost-panel" wx:if="{{canEditBundledCosts}}">
           <view class="switch-row">
             <view>
               <text class="field-label">同时记录交通</text>
@@ -324,6 +324,9 @@
             <input class="form-input {{formErrors.accommodationAmount ? 'field-invalid' : ''}}" type="digit" inputmode="decimal" value="{{formData.accommodationAmount}}" data-field="accommodationAmount" placeholder="0.00" bindinput="handleFormInput" />
             <text wx:if="{{formErrors.accommodationAmount}}" class="field-error-text">{{formErrors.accommodationAmount}}</text>
           </view>
+        </view>
+        <view class="bundle-cost-panel bundle-cost-note" wx:else>
+          <text class="muted">该记录初始未添加交通/住宿，编辑时不可再新增或修改关联交通/住宿；如需记录，请单独新增交通或住宿消费。</text>
         </view>
       </view>
 
