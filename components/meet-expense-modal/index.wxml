@@ -166,7 +166,18 @@
             <text class="selected-tag-close" data-tag="{{item}}" catchtap="handleRemoveRemarkTag">×</text>
           </view>
         </view>
-        <input class="form-input" value="{{formRemarkText}}" data-field="remark" placeholder="选填，例如购买渠道、票务来源、追星感受" bindinput="handleFormInput" />
+        <view class="remark-input-wrap">
+          <textarea
+            class="remark-textarea"
+            value="{{formRemarkText}}"
+            data-field="remark"
+            maxlength="1000"
+            auto-height="true"
+            placeholder="选填，例如购买渠道、票务来源、追星感受"
+            bindinput="handleFormInput"
+          />
+          <text class="remark-counter">{{remarkTextLength}}/{{maxRemarkLength}}</text>
+        </view>
         <view class="quick-tag-row">
           <text
             class="quick-tag {{item.active ? 'quick-tag-active' : ''}}"
@@ -177,7 +188,10 @@
           >#{{item.name}}</text>
         </view>
         <view class="custom-tag-row">
-          <input class="custom-tag-input" value="{{customRemarkTag}}" placeholder="自定义标签" bindinput="handleCustomRemarkTagInput" />
+          <view class="custom-tag-input-wrap">
+            <input class="custom-tag-input" value="{{customRemarkTag}}" placeholder="自定义标签" maxlength="40" bindinput="handleCustomRemarkTagInput" />
+            <text class="custom-tag-counter">{{customRemarkTagLength}}/{{maxCustomTagLength}}</text>
+          </view>
           <button class="custom-tag-button" bindtap="handleAddCustomRemarkTag">添加</button>
         </view>
       </view>

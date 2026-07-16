@@ -13,16 +13,14 @@ const TEXT_FIELD_LIMITS = {
   itemName: MAX_NAME_LENGTH,
   city: MAX_TEXT_LENGTH,
   location: MAX_TEXT_LENGTH,
-  seat: MAX_TEXT_LENGTH,
-  remark: MAX_REMARK_LENGTH
+  seat: MAX_TEXT_LENGTH
 };
 
 const TEXT_FIELD_NAMES = {
   itemName: '项目名称',
   city: '城市',
   location: '地点',
-  seat: '座位',
-  remark: '备注'
+  seat: '座位'
 };
 
 Component({
@@ -75,7 +73,11 @@ Component({
     quickRemarkTags: meetExpenseForm.getQuickRemarkTags(),
     selectedRemarkTags: [],
     formRemarkText: '',
-    customRemarkTag: ''
+    remarkTextLength: 0,
+    maxRemarkLength: MAX_REMARK_LENGTH,
+    customRemarkTag: '',
+    customRemarkTagLength: 0,
+    maxCustomTagLength: MAX_CUSTOM_TAG_LENGTH
   },
 
   observers: {
@@ -94,8 +96,10 @@ Component({
       return {
         selectedRemarkTags: remarkParts.tags,
         formRemarkText: remarkParts.text,
+        remarkTextLength: remarkParts.text.length,
         quickRemarkTags: meetExpenseForm.getQuickRemarkTags(remark),
-        customRemarkTag: ''
+        customRemarkTag: '',
+        customRemarkTagLength: 0
       };
     },
 
@@ -454,10 +458,13 @@ Component({
     },
 
     updateRemarkTags(nextTags, remarkText, extraData = {}) {
-      const limitedRemark = this.sanitizeFormInput(
-        'remark',
-        meetExpenseForm.composeRemark(nextTags, remarkText)
+      const safeRemarkText = this.limitPlainText(
+        remarkText,
+        this.data.formRemarkText,
+        MAX_REMARK_LENGTH,
+        '备注'
       );
+      const limitedRemark = meetExpenseForm.composeRemark(nextTags, safeRemarkText);
       const remarkParts = meetExpenseForm.parseRemarkParts(limitedRemark);
       const formData = {
         ...this.data.formData,
@@ -468,6 +475,7 @@ Component({
         formData,
         selectedRemarkTags: remarkParts.tags,
         formRemarkText: remarkParts.text,
+        remarkTextLength: remarkParts.text.length,
         formErrors: meetExpenseForm.getFormErrors(formData, this.data.today),
         formWarnings: meetExpenseForm.getFormWarnings(formData),
         quickRemarkTags: meetExpenseForm.getQuickRemarkTags(formData.remark),
@@ -505,7 +513,11 @@ Component({
         this.showInputLimitToast(`标签上限为 ${MAX_CUSTOM_TAG_LENGTH} 个字`);
         value = this.data.customRemarkTag || '';
       }
-      this.setData({ customRemarkTag: value });
+      this.setData({
+        customRemarkTag: value,
+        customRemarkTagLength: value.length
+      });
+      return undefined;
     },
 
     handleAddCustomRemarkTag() {
@@ -518,33 +530,38 @@ Component({
       this.updateRemarkTags(
         selectedTags.includes(tag) ? selectedTags : [...selectedTags, tag],
         this.data.formRemarkText,
-        { customRemarkTag: '' }
+        { customRemarkTag: '', customRemarkTagLength: 0 }
       );
     },
 
     handleFormInput(event) {
       const { field } = event.currentTarget.dataset;
       if (field === 'remark') {
+        const rawRemarkText = String(event.detail.value || '');
+        const remarkText = this.limitPlainText(
+          rawRemarkText,
+          this.data.formRemarkText,
+          MAX_REMARK_LENGTH,
+          '备注'
+        );
         const composedRemark = meetExpenseForm.composeRemark(
           this.data.selectedRemarkTags,
-          event.detail.value
+          remarkText
         );
-        const safeRemark = this.sanitizeFormInput('remark', composedRemark);
-        const remarkParts = meetExpenseForm.parseRemarkParts(safeRemark);
         const formData = {
           ...this.data.formData,
-          remark: safeRemark
+          remark: composedRemark
         };
         this.setData({
           formTouched: true,
           formData,
-          formRemarkText: remarkParts.text,
-          selectedRemarkTags: remarkParts.tags,
+          formRemarkText: remarkText,
+          remarkTextLength: remarkText.length,
           formErrors: meetExpenseForm.getFormErrors(formData, this.data.today),
           formWarnings: meetExpenseForm.getFormWarnings(formData),
           quickRemarkTags: meetExpenseForm.getQuickRemarkTags(formData.remark)
         });
-        return;
+        return rawRemarkText.length > MAX_REMARK_LENGTH ? remarkText : undefined;
       }
       const value = this.sanitizeFormInput(field, event.detail.value);
       const formData = {
