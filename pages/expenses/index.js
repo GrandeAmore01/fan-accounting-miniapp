@@ -306,6 +306,7 @@ Page({
     formWarnings: {},
     focusedWarningField: '',
     formTouched: false,
+    canEditBundledCosts: true,
     formData: createDefaultFormData(),
     today: '',
     expenseDateEnd: '',
@@ -910,6 +911,10 @@ Page({
 
   applyFormState(nextState) {
     const formData = nextState.formData || this.data.formData;
+    const nextFormMode =
+      typeof nextState.formMode === 'string'
+        ? nextState.formMode
+        : this.data.formMode;
     const categoryIndex =
       typeof nextState.categoryIndex === 'number'
         ? nextState.categoryIndex
@@ -991,6 +996,7 @@ Page({
       formTouched: nextFormTouched,
       formErrors: nextFormErrors,
       formWarnings: nextFormTouched ? this.getFormWarnings(nextFormData) : {},
+      canEditBundledCosts: nextFormData.category === 'meet' && ['create', 'edit_bundle'].includes(nextFormMode),
       categoryIndex: safeCategoryIndex,
       subTypes,
       subTypeIndex: safeSubTypeIndex,

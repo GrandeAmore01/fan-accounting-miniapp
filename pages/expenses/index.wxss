@@ -242,6 +242,10 @@
   background: #fffdf4;
 }
 
+.bundle-cost-note {
+  line-height: 1.5;
+}
+
 .fee-single {
   margin-top: 18rpx;
 }
